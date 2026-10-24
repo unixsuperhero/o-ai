@@ -25,7 +25,7 @@ The nouns are an ochazuke runtime behind `ochazuke/cli`: `o-ai NOUN VERB [ENTRY]
 | `provider` | list, show | `Provider` |
 | `model` | list, show, select | `Model` (`cliSlug`, `args`, `thinking`) |
 | `thinking` | list, show | the level with `model`, `cliSlug`, `launchArgs` |
-| `skill` | list, show | `Resource` (path, resolvedPath, frontmatter, content) |
+| `skill` | list, show | `Resource` (path, resolvedPath, frontmatter; content in show) |
 | `agent` | list, show | `Resource` |
 | `settings` | list, show | `Setting` |
 | `status` | list, show | list: counts per kind; show: the whole inventory |
@@ -56,7 +56,7 @@ row = {
 }
 ```
 
-and `show` prints the `data` record alone, unchanged from aiview.
+and `show` prints the whole record alone, unchanged from aiview. A list row's `data` is that record without its bulky fields, so a list stays small: skill and agent drop `content`, model `metadata`, harness `settings` (the settings noun lists them), provider `models` (`listOmit` in `shell.go`).
 
 Words: a noun is resolved by unique prefix (`mo` is model, `sk` is skill; `s` is ambiguous between settings, skill and status), a verb too (`mo li`, `mo se`; `mo s` is ambiguous between select and show). Ambiguity is an error, never a first match. A bare word after `show` or `select` is ENTRY (an id, name, slug or path; with several matches it is an error listing them, so narrow with `--harness`/`--provider` or use an id). After `list`, a bare word fills `--harness`.
 

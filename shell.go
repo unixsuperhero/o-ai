@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -22,6 +23,37 @@ import (
 
 // nouns are the runtime's nouns: the inventory kinds, then status.
 var nouns = append(append([]string{}, categories...), "status")
+
+// listOmit names, per noun, the bulky fields a list row's data leaves out
+// (multi-KB at the long tail); show still prints the whole record.
+var listOmit = map[string][]string{
+	"skill":    {"content"},
+	"agent":    {"content"},
+	"model":    {"metadata"},
+	"harness":  {"settings"},
+	"provider": {"models"},
+}
+
+// lean is a record as a list row carries it: its JSON without the noun's
+// listOmit fields, every other key unchanged.
+func lean(noun string, v any) (any, error) {
+	omit := listOmit[noun]
+	if len(omit) == 0 {
+		return v, nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	for _, k := range omit {
+		delete(m, k)
+	}
+	return m, nil
+}
 
 // Version is the catalog's version.
 const Version = "0.1.0"
@@ -94,6 +126,9 @@ func (t *Tool) shell() *ocli.Shell {
 		rows := []Row{}
 		items := []ochazuke.ListItem{}
 		add := func(id, label string, value any) {
+			if err == nil {
+				value, err = lean(noun, value)
+			}
 			rows = append(rows, Row{ID: noun + "/" + id, Label: label, Data: value})
 			items = append(items, ochazuke.ListItem{ID: noun + "/" + id, Label: label, Noun: noun, Data: id})
 		}
@@ -105,6 +140,9 @@ func (t *Tool) shell() *ocli.Shell {
 			for _, e := range filterModel(in.Entries(noun, o), model) {
 				add(e.ID, label(noun, e), e.Value)
 			}
+		}
+		if err != nil {
+			return nil, err
 		}
 		return rows, lists[noun].SetItems(items)
 	}

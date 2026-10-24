@@ -56,6 +56,15 @@ func TestSkillRowsShowByTargetAndName(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, data := rowsOf[Resource](t, out)
+	var raw []struct{ Data map[string]any }
+	if err := json.Unmarshal([]byte(out), &raw); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range raw {
+		if _, ok := r.Data["content"]; ok {
+			t.Fatalf("a skill row carries content: %v", r.Data)
+		}
+	}
 	var reviews []Row
 	broken := false
 	for i, r := range rows {

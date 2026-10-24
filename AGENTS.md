@@ -22,7 +22,7 @@ The AI hub's data tool (`o-ai`, so `o ai` and `mtm ai`). An oden app with an och
 
 ## Invariants
 
-- A list's rows are `{id: "NOUN/ENTRY_ID", label, data}`; `data` and `show` print the inventory record in the shape aiview always printed. Change a record's JSON only with its consumers.
+- A list's rows are `{id: "NOUN/ENTRY_ID", label, data}`; `show` prints the inventory record in the shape aiview always printed, and `data` is that record minus the noun's `listOmit` fields (content, metadata, ...). Change a record's JSON only with its consumers.
 - Every list verb declares `.Rows(noun)`; `TestCatalogDeclaresRowsForEveryNoun` pins it.
 - No TUI code and no key bindings here; a host renders. Never bind function keys.
 - No verb-specific branches outside the runtime: a feature is a noun, its verbs and rows. The collectors know no command line.
