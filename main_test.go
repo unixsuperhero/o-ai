@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -11,23 +12,18 @@ import (
 )
 
 func TestUniqueCommandPrefixes(t *testing.T) {
-	for _, tt := range []struct {
-		args         []string
-		kind, action string
-	}{
-		{[]string{"mo", "li"}, "model", "list"},
-		{[]string{"list", "providers"}, "provider", "list"},
-		{[]string{"sh", "mo", "opus"}, "model", "show"},
-		{[]string{"mo", "se", "opus"}, "model", "select"},
-		{[]string{"th", "li"}, "thinking", "list"},
+	home := isolatedHome(t)
+	put(t, filepath.Join(home, ".codex", "models_cache.json"), `{"models":[{"slug":"opus","display_name":"Opus"}]}`)
+	flags := []string{"--home", home, "--project", home, "--no-probe"}
+	for _, args := range [][]string{
+		{"mo", "li"}, {"prov", "list"}, {"models"}, {"providers", "li"}, {"mo", "sh", "opus"}, {"mo", "se", "opus"}, {"th", "li"}, {"sk", "li"},
 	} {
-		r, err := parseArgs(tt.args)
-		if err != nil || r.kind != tt.kind || r.action != tt.action {
-			t.Fatalf("%v => %s %s, %v", tt.args, r.kind, r.action, err)
+		if _, _, err := runCLI(t, append(args, flags...)...); err != nil {
+			t.Fatalf("%v: %v", args, err)
 		}
 	}
-	for _, args := range [][]string{{"s"}, {"t"}, {"mo", "s"}, {"mo", "li", "extra"}, {"--timeout", "0s"}, {"mo", "--unknown"}} {
-		if _, err := parseArgs(args); err == nil {
+	for _, args := range [][]string{{"s", "list"}, {"mo", "s", "opus"}, {"mo", "li", "--unknown", "x"}, {"mo", "li", "--timeout", "0s"}, {"nothing"}} {
+		if _, _, err := runCLI(t, append(args, flags...)...); err == nil {
 			t.Errorf("accepted invalid/ambiguous command %v", args)
 		}
 	}
@@ -60,6 +56,38 @@ func isolatedHome(t *testing.T) string {
 	}
 	return home
 }
+
+// runCLI runs o-ai with args over the test's home and returns stdout and
+// stderr.
+func runCLI(t *testing.T, args ...string) (string, string, error) {
+	t.Helper()
+	var out, errOut bytes.Buffer
+	home, _ := os.UserHomeDir()
+	cwd, _ := os.Getwd()
+	tool := &Tool{Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errOut, Env: os.Environ(), Home: home, Cwd: cwd, Prog: "o-ai"}
+	err := tool.Main(context.Background(), args)
+	return out.String(), errOut.String(), err
+}
+
+// rowsOf decodes a list's rows, their data into data.
+func rowsOf[T any](t *testing.T, out string) ([]Row, []T) {
+	t.Helper()
+	var rows []struct {
+		ID    string `json:"id"`
+		Label string `json:"label"`
+		Data  T      `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &rows); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	plain := make([]Row, len(rows))
+	data := make([]T, len(rows))
+	for i, r := range rows {
+		plain[i], data[i] = Row{ID: r.ID, Label: r.Label}, r.Data
+	}
+	return plain, data
+}
+
 func put(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -73,13 +101,13 @@ func put(t *testing.T, path, content string) {
 func TestCLIReadsModelCapabilitiesAndSavedSelection(t *testing.T) {
 	home := isolatedHome(t)
 	put(t, filepath.Join(home, ".codex", "models_cache.json"), `{"fetched_at":"2026-10-01T00:00:00Z","models":[{"slug":"test-model","display_name":"Test Model","supported_reasoning_levels":[{"effort":"high","description":"Deep reasoning"}],"context_window":250000}]}`)
-	base := []string{"--home", home, "--project", home, "--no-probe", "--json", "--harness", "codex"}
-	var out, errOut bytes.Buffer
-	if err := run(append(append([]string{}, base...), "mo", "se", "test-model"), &out, &errOut); err != nil {
+	base := []string{"--home", home, "--project", home, "--no-probe", "--harness", "codex"}
+	out, _, err := runCLI(t, append([]string{"mo", "se", "test-model"}, base...)...)
+	if err != nil {
 		t.Fatal(err)
 	}
 	var selected Model
-	if err := json.Unmarshal(out.Bytes(), &selected); err != nil {
+	if err := json.Unmarshal([]byte(out), &selected); err != nil {
 		t.Fatal(err)
 	}
 	if selected.ID != "codex:openai/test-model" || selected.Name != "Test Model" || !reflect.DeepEqual(selected.Thinking, []Thinking{{Slug: "high", Name: "High", Description: "Deep reasoning", Args: []string{"-c", `model_reasoning_effort="high"`}}}) {
@@ -92,30 +120,30 @@ func TestCLIReadsModelCapabilitiesAndSavedSelection(t *testing.T) {
 	if info.Mode().Perm() != 0600 {
 		t.Fatalf("selection permissions %o", info.Mode().Perm())
 	}
-	out.Reset()
-	if err := run(append(append([]string{}, base...), "mo", "sh"), &out, &errOut); err != nil {
+	out, _, err = runCLI(t, append([]string{"mo", "sh"}, base...)...)
+	if err != nil {
 		t.Fatal(err)
 	}
 	var shown Model
-	if err := json.Unmarshal(out.Bytes(), &shown); err != nil {
+	if err := json.Unmarshal([]byte(out), &shown); err != nil {
 		t.Fatal(err)
 	}
 	if shown.ID != "codex:openai/test-model" {
 		t.Fatalf("saved selection not used: %s", shown.ID)
 	}
-	out.Reset()
-	if err := run(append(append([]string{}, base...), "th", "li", "--model", "test-model"), &out, &errOut); err != nil {
+	out, _, err = runCLI(t, append([]string{"th", "li", "--model", "test-model"}, base...)...)
+	if err != nil {
 		t.Fatal(err)
 	}
-	var levels []struct {
+	rows, levels := rowsOf[struct {
 		Slug       string   `json:"slug"`
 		LaunchArgs []string `json:"launchArgs"`
-	}
-	if err := json.Unmarshal(out.Bytes(), &levels); err != nil {
-		t.Fatal(err)
-	}
+	}](t, out)
 	if len(levels) != 1 || levels[0].Slug != "high" || !reflect.DeepEqual(levels[0].LaunchArgs, []string{"codex", "--model", "test-model", "-c", `model_provider="openai"`, "-c", `model_reasoning_effort="high"`}) {
-		t.Fatalf("wrong thinking launch: %s", out.String())
+		t.Fatalf("wrong thinking launch: %s", out)
+	}
+	if rows[0].ID != "thinking/codex:openai/test-model:high" || rows[0].Label != "Test Model · high [codex]" {
+		t.Fatalf("wrong thinking row: %+v", rows[0])
 	}
 }
 
@@ -153,7 +181,11 @@ func TestSkillDiscoveryFollowsLinksWithoutCycles(t *testing.T) {
 		t.Fatalf("wanted exactly one skill despite cycle, got %d", len(c.inventory.Skills))
 	}
 	skill := c.inventory.Skills[0]
-	if skill.Name != "example" || skill.Description != "Review code safely.\n" || skill.ResolvedPath != filepath.Join(source, "SKILL.md") || !strings.Contains(skill.Content, "Only inspect the current project.") {
+	resolved, err := filepath.EvalSymlinks(filepath.Join(source, "SKILL.md")) // macOS: TempDir is under the /var symlink
+	if err != nil {
+		t.Fatal(err)
+	}
+	if skill.Name != "example" || skill.Description != "Review code safely.\n" || skill.ResolvedPath != resolved || !strings.Contains(skill.Content, "Only inspect the current project.") {
 		t.Fatalf("wrong discovered skill: %+v", skill)
 	}
 }
@@ -162,23 +194,19 @@ func TestJSONCAndTOMLSettings(t *testing.T) {
 	home := isolatedHome(t)
 	put(t, filepath.Join(home, ".claude", "settings.json"), "{ // user's selected model\n\"model\": \"opus\", \"env\": {\"API_KEY\": \"secret-fixture\"}, }")
 	put(t, filepath.Join(home, ".codex", "config.toml"), "model = 'custom'\n[model_providers.local]\nbase_url = 'http://localhost:8080/v1'\napi_key = 'local-private'\n")
-	var out, errOut bytes.Buffer
-	err := run([]string{"settings", "list", "--home", home, "--project", home, "--no-probe", "--json"}, &out, &errOut)
+	out, _, err := runCLI(t, "settings", "list", "--home", home, "--project", home, "--no-probe")
 	if err != nil {
 		t.Fatal(err)
 	}
-	var settings []Setting
-	if err := json.Unmarshal(out.Bytes(), &settings); err != nil {
-		t.Fatal(err)
-	}
+	_, settings := rowsOf[Setting](t, out)
 	if len(settings) != 2 {
-		t.Fatalf("wanted two settings files: %s", out.String())
+		t.Fatalf("wanted two settings files: %s", out)
 	}
-	if strings.Contains(out.String(), "secret-fixture") || strings.Contains(out.String(), "local-private") {
+	if strings.Contains(out, "secret-fixture") || strings.Contains(out, "local-private") {
 		t.Fatal("CLI leaked a credential")
 	}
 	if settings[0].Values["model"] != "opus" || settings[1].Values["model"] != "custom" {
-		t.Fatalf("incorrect settings: %s", out.String())
+		t.Fatalf("incorrect settings: %s", out)
 	}
 }
 
@@ -186,18 +214,15 @@ func TestInvalidConfigurationRemainsInspectable(t *testing.T) {
 	home := isolatedHome(t)
 	path := filepath.Join(home, ".claude", "settings.json")
 	put(t, path, `{"model":"opus" "apiKey":"do-not-expose"}`)
-	var out, warnings bytes.Buffer
-	if err := run([]string{"settings", "list", "--home", home, "--project", home, "--no-probe", "--json"}, &out, &warnings); err != nil {
+	out, warnings, err := runCLI(t, "settings", "list", "--home", home, "--project", home, "--no-probe")
+	if err != nil {
 		t.Fatal(err)
 	}
-	var settings []Setting
-	if err := json.Unmarshal(out.Bytes(), &settings); err != nil {
-		t.Fatal(err)
-	}
+	_, settings := rowsOf[Setting](t, out)
 	if len(settings) != 1 || settings[0].Path != path || settings[0].Error == "" {
-		t.Fatalf("invalid source disappeared: %s", out.String())
+		t.Fatalf("invalid source disappeared: %s", out)
 	}
-	if strings.Contains(out.String()+warnings.String(), "do-not-expose") {
+	if strings.Contains(out+warnings, "do-not-expose") {
 		t.Fatal("parser error leaked the credential")
 	}
 }

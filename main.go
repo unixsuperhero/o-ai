@@ -1,295 +1,129 @@
+// Command o-ai is the AI hub's data tool: the local AI harnesses (omp,
+// claude, codex, pi, opencode, gemini, clawed) and their providers, models,
+// thinking levels, skills, agents and settings, inspected without making a
+// model request. It was aiview; it is now a family tool (o-<tool>), so
+// o ai ARGS runs it, and so does mtm ai ARGS (mtm finds o-<sub> after its
+// own mtm-<sub>).
+//
+//	o-ai NOUN list [--harness H] [--provider P] [--model M] [--search TEXT]
+//	o-ai NOUN show ENTRY|--target ID
+//	o-ai model select ENTRY
+//	o-ai status show                 the whole inventory
+//	o-ai NOUNs                       NOUN list (o-ai skills, o-ai models)
+//	o-ai catalog                     the nouns and verbs, for a host (nabe)
+//
+// NOUN is harness, provider, model, thinking, skill, agent, settings or
+// status: an ochazuke runtime behind ochazuke/cli (shell.go), every verb
+// printing JSON. There is no TUI here: o tui (nabe) renders the rows after
+// o-nabe extension register o-ai.
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
-	"text/tabwriter"
-	"time"
+
+	ocli "github.com/unixsuperhero/ochazuke/cli"
+	"github.com/unixsuperhero/oden"
 )
 
-const helpText = `aiview — inspect local AI harnesses without making model requests
+// Tool is one invocation's world: streams, environment, and the home and
+// working directory a verb's --home and --project default to.
+type Tool struct {
+	Stdin          io.Reader
+	Stdout, Stderr io.Writer
+	Env            []string
+	Home, Cwd      string
+	Prog           string // "o ai" under o, "mtm ai" under mtm, else "o-ai"; messages only
 
-Usage:
-  aiview status
-  aiview <harness|provider|model|thinking|skill|agent|settings> [list]
-  aiview <resource> show <id-or-name>
-  aiview list <resource>
-  aiview show <resource> <id-or-name>
-  aiview model select <id-or-name>
-  aiview model show                     show your saved selection
-  aiview tui
-
-Commands accept unique prefixes: "mo li", "prov sh", "th li".
-Ambiguous prefixes are rejected, not guessed. Plural nouns also work.
-
-Options (anywhere):
-  --harness NAME        exact harness ID, e.g. omp, claude, codex
-  --provider NAME       exact provider slug
-  --model NAME          filter models/thinking by ID, slug, or display name
-  --search TEXT         case-insensitive inventory search
-  --project DIRECTORY  inspect this project's settings/resources (default: cwd)
-  --home DIRECTORY     alternate home for file discovery and child processes
-  --timeout DURATION   per-command deadline (default: 15s)
-  --no-probe           files only; do not invoke harness metadata commands
-  --json               machine-readable output
-  --help               show this help
-
-Examples:
-  aiview mo li --harness omp
-  aiview mo sh openai-codex/gpt-6-sol --harness omp
-  aiview th li --model openai-codex/gpt-6-sol --harness omp
-  aiview mo se opus --harness claude
-  aiview mo sh
-  aiview sk li --search review
-  aiview status --json
-
-TUI: tab/shift-tab categories · arrows/j/k select · enter details · / search
-     esc back · r refresh · s save model · o choose project · q quit
-
-Catalog membership does not prove authorization. Native metadata commands may
-update their own caches and load trusted harness configuration. Aiview sends
-no user prompts or inference requests.
-`
+	cache map[Options]Inventory // one collection per option set per process
+}
 
 func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "aiview:", err)
-		os.Exit(1)
-	}
-}
-
-type request struct {
-	kind, action, query, model string
-	options                    Options
-}
-
-func parseArgs(args []string) (request, error) {
 	home, err := os.UserHomeDir()
-	if err != nil {
-		return request{}, err
+	if err == nil {
+		home, err = filepath.Abs(home)
 	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return request{}, err
+	cwd, cwdErr := os.Getwd()
+	prog := progName(os.Getenv)
+	if err = errors.Join(err, cwdErr); err != nil {
+		os.Exit(oden.Report(os.Stderr, prog, err))
 	}
-	r := request{options: Options{Home: home, Project: cwd, Timeout: 15 * time.Second}}
-	var words []string
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if arg == "--" {
-			words = append(words, args[i+1:]...)
-			break
-		}
-		if !strings.HasPrefix(arg, "-") {
-			words = append(words, arg)
-			continue
-		}
-		key, value, hasValue := strings.Cut(arg, "=")
-		switch key {
-		case "--help", "-h":
-			r.kind = "help"
-			return r, nil
-		case "--json":
-			if hasValue {
-				return r, fmt.Errorf("%s does not take a value", key)
-			}
-			r.options.JSON = true
-			continue
-		case "--no-probe":
-			if hasValue {
-				return r, fmt.Errorf("%s does not take a value", key)
-			}
-			r.options.NoProbe = true
-			continue
-		}
-		if !contains([]string{"--harness", "--provider", "--model", "--search", "--project", "--home", "--timeout"}, key) {
-			return r, fmt.Errorf("unknown option %q", key)
-		}
-		if !hasValue {
-			i++
-			if i >= len(args) {
-				return r, fmt.Errorf("%s needs a value", key)
-			}
-			value = args[i]
-		}
-		if value == "" {
-			return r, fmt.Errorf("%s needs a non-empty value", key)
-		}
-		switch key {
-		case "--harness":
-			r.options.Harness = value
-		case "--provider":
-			r.options.Provider = value
-		case "--model":
-			r.model = value
-		case "--search":
-			r.options.Search = value
-		case "--project":
-			r.options.Project = value
-		case "--home":
-			r.options.Home = value
-		case "--timeout":
-			duration, err := time.ParseDuration(value)
-			if err != nil || duration <= 0 {
-				return r, fmt.Errorf("invalid positive duration %q", value)
-			}
-			r.options.Timeout = duration
-		}
-	}
-	r.options.Home, err = filepath.Abs(r.options.Home)
-	if err != nil {
-		return r, err
-	}
-	r.options.Project = expandPath(r.options.Project, r.options.Home, cwd)
-	r.options.Project, err = filepath.Abs(r.options.Project)
-	if err != nil {
-		return r, err
-	}
-	for _, path := range []string{r.options.Home, r.options.Project} {
-		info, err := os.Stat(path)
-		if err != nil || !info.IsDir() {
-			return r, fmt.Errorf("not a readable directory: %s", path)
-		}
-	}
-	if len(words) == 0 {
-		r.kind = "status"
-		return r, nil
-	}
-	top := append(append([]string{}, categories...), "status", "list", "show", "tui", "help")
-	command, err := resolveCommand(words[0], top)
-	if err != nil {
-		return r, err
-	}
-	words = words[1:]
-	if command == "list" || command == "show" {
-		r.action = command
-		if len(words) == 0 {
-			return r, fmt.Errorf("%s needs a resource name", command)
-		}
-		r.kind, err = resolveCommand(words[0], categories)
-		if err != nil {
-			return r, err
-		}
-		words = words[1:]
-	} else {
-		r.kind = command
-		r.action = "list"
-		if contains(categories, command) && len(words) > 0 {
-			actions := []string{"list", "show"}
-			if command == "model" {
-				actions = append(actions, "select")
-			}
-			r.action, err = resolveCommand(words[0], actions)
-			if err != nil {
-				return r, err
-			}
-			words = words[1:]
-		}
-	}
-	if len(words) > 1 {
-		return r, fmt.Errorf("too many arguments; quote names containing spaces")
-	}
-	if len(words) == 1 {
-		r.query = words[0]
-	}
-	if r.action == "list" && r.query != "" {
-		return r, fmt.Errorf("list takes no ID; use --search or show")
-	}
-	if (r.kind == "tui" || r.kind == "status" || r.kind == "help") && r.query != "" {
-		return r, fmt.Errorf("%s takes no arguments", r.kind)
-	}
-	return r, nil
+	t := &Tool{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr, Env: os.Environ(), Home: home, Cwd: cwd, Prog: prog}
+	os.Exit(oden.Report(os.Stderr, t.Prog, t.Main(context.Background(), os.Args[1:])))
 }
 
-func resolveCommand(word string, choices []string) (string, error) {
-	word = strings.ToLower(word)
-	for _, choice := range choices {
-		if word == choice || word == choice+"s" {
-			return choice, nil
-		}
+// progName is how messages name this command: the word under the parent oden
+// app that ran it, else the bin name.
+func progName(getenv func(string) string) string {
+	if parent := getenv("ODEN_PARENT"); parent != "" {
+		return parent + " ai"
 	}
-	var matches []string
-	for _, choice := range choices {
-		if strings.HasPrefix(choice, word) {
-			matches = append(matches, choice)
-		}
-	}
-	if len(matches) == 1 {
-		return matches[0], nil
-	}
-	if len(matches) == 0 {
-		return "", fmt.Errorf("unknown command %q (choose %s)", word, strings.Join(choices, ", "))
-	}
-	sort.Strings(matches)
-	return "", fmt.Errorf("ambiguous command %q: %s", word, strings.Join(matches, ", "))
+	return "o-ai"
 }
 
-func run(args []string, out, errOut io.Writer) error {
-	r, err := parseArgs(args)
-	if err != nil {
-		return err
-	}
-	if r.kind == "help" {
-		_, err = fmt.Fprint(out, helpText)
-		return err
-	}
-	if r.kind == "tui" {
-		if r.options.JSON {
-			return errors.New("tui cannot be combined with --json")
+// Main runs one command: a noun of the runtime (oden resolves a unique
+// prefix, the shell a verb's), catalog, an oden builtin, or by default a
+// plural noun (skills is skill list) and, with no words, status list.
+func (t *Tool) Main(ctx context.Context, args []string) error {
+	app := oden.New("o-ai", args, oden.WithBuiltins(), oden.WithStdio(t.Stdin, t.Stdout, t.Stderr), oden.WithEnv(t.Env))
+	sh := t.shell()
+	mount(app, sh)
+	app.Default = func(ctx context.Context, args []string) error {
+		if len(args) == 0 {
+			return sh.Run(ctx, []string{"status", "list"})
 		}
-		return runTUI(r.options)
-	}
-	in := Collect(r.options)
-	printWarnings(errOut, in)
-	if r.kind == "status" {
-		if r.options.JSON {
-			return writeJSON(out, in)
+		if noun := plural(args[0]); noun != "" {
+			rest := args[1:]
+			if len(rest) == 0 || strings.HasPrefix(rest[0], "--") {
+				rest = append([]string{"list"}, rest...)
+			}
+			return sh.Run(ctx, append([]string{noun}, rest...))
 		}
-		printEntries(out, in.Entries("harness", r.options))
-		fmt.Fprintf(out, "\n%d models · %d providers · %d skills · %d agents\nProject: %s\n", len(in.Models), len(in.Providers), len(in.Skills), len(in.Agents), in.Project)
-		return nil
+		return fmt.Errorf("unknown command %q (%s help lists them; nouns: %s)", args[0], t.Prog, strings.Join(nouns, ", "))
 	}
-	rows := filterModel(in.Entries(r.kind, r.options), r.model)
-	if r.action == "show" || r.action == "select" {
-		if r.query == "" && r.kind == "model" && r.action == "show" {
-			r.query, err = loadSelection(r.options)
-			if err != nil {
-				return err
+	return app.Run(ctx)
+}
+
+// mount is ocli.Mount for this tool's own nouns only: each noun an inline
+// command running the shell, plus catalog. The framework's nouns (mode,
+// modal, palette, ...) stay out of the command words, so model's unique
+// prefix is still mo; they remain in the catalog, where a host skips them.
+func mount(app *oden.App, sh *ocli.Shell) {
+	for _, noun := range nouns {
+		var verbs []string
+		for _, op := range sh.Runtime.Catalog() {
+			if op.Noun == noun {
+				verbs = append(verbs, op.Verb)
 			}
 		}
-		if r.query == "" {
-			return errors.New("show/select needs an ID or name")
-		}
-		row, err := selectEntry(rows, r.query)
+		app.Add(oden.Command{Name: noun, Summary: strings.Join(verbs, " "), Source: "noun", Run: func(ctx context.Context, rest []string) error {
+			return sh.Run(ctx, append([]string{noun}, rest...))
+		}})
+	}
+	app.Add(oden.Command{Name: "catalog", Summary: "print the nouns, verbs, bindings and pages as JSON", Source: "cli", Run: func(context.Context, []string) error {
+		data, err := ocli.Catalog(sh.Runtime, sh.Bin, sh.Version)
 		if err != nil {
 			return err
 		}
-		if r.action == "select" {
-			if err := saveSelection(r.options, row.ID); err != nil {
-				return err
-			}
+		_, err = fmt.Fprintf(sh.Stdout, "%s\n", data)
+		return err
+	}})
+}
+
+// plural is the noun a plural word names (skills, harnesses), else "".
+func plural(word string) string {
+	for _, noun := range nouns {
+		if word == noun+"s" || word == noun+"es" {
+			return noun
 		}
-		if r.options.JSON {
-			return writeJSON(out, row.Value)
-		}
-		fmt.Fprintln(out, detail(row.Value))
-		return nil
 	}
-	if r.options.JSON {
-		values := make([]any, 0, len(rows))
-		for _, row := range rows {
-			values = append(values, row.Value)
-		}
-		return writeJSON(out, values)
-	}
-	printEntries(out, rows)
-	return nil
+	return ""
 }
 
 func filterModel(rows []Entry, query string) []Entry {
@@ -344,28 +178,6 @@ func selectEntry(rows []Entry, query string) (Entry, error) {
 	return Entry{}, fmt.Errorf("ambiguous selection %q; use an exact ID or --harness/--provider:\n  %s", query, strings.Join(ids, "\n  "))
 }
 
-func printEntries(out io.Writer, rows []Entry) {
-	w := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tHARNESS\tDETAIL")
-	for _, row := range rows {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", oneLine(row.ID), oneLine(row.Name), row.Harness, shorten(oneLine(row.Summary), 100))
-	}
-	w.Flush()
-	fmt.Fprintf(out, "\n%d entries\n", len(rows))
-}
-func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
-func shorten(s string, n int) string {
-	r := []rune(s)
-	if len(r) > n {
-		return string(r[:n-1]) + "…"
-	}
-	return s
-}
-func writeJSON(out io.Writer, v any) error {
-	enc := json.NewEncoder(out)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
-}
 func printWarnings(out io.Writer, in Inventory) {
 	for _, w := range in.Warnings {
 		fmt.Fprintln(out, "warning:", w)
@@ -403,7 +215,7 @@ func saveSelection(o Options, id string) error {
 func loadSelection(o Options) (string, error) {
 	m, err := readConfig(selectionPath(o))
 	if err != nil {
-		return "", errors.New("no saved model selection; use 'aiview model select ID' first")
+		return "", errors.New("no saved model selection; use 'o-ai model select ID' first")
 	}
 	id := text(m, "model")
 	if id == "" {

@@ -16,7 +16,6 @@ type Options struct {
 	Harness  string
 	Provider string
 	Search   string
-	JSON     bool
 }
 
 type Setting struct {

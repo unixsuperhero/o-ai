@@ -1,70 +1,68 @@
-# aiview
+# o-ai
 
-A standalone Go CLI and terminal browser for local AI harnesses, providers, models, thinking levels, skills, and agents. It has no dependency on Ochazuke. JSON output is the integration point for other tools.
+The AI hub's data tool: the local AI harnesses (omp, Claude Code, Codex, Pi, OpenCode, Gemini, `clawed`) and their providers, models, thinking levels, skills, agents and settings, inspected without making a model request. It was `aiview` (hub/ai/utils/aiview, whose history this repository carries); it is now a family tool, so `o ai ...` and `mtm ai ...` run it, and nabe mounts it as a page.
 
-## Run
+Every verb prints JSON. There is no TUI in this repository: nabe is the TUI (`o tui`, below).
 
-Requires Go 1.25 or newer to build. The generated binary does not need Go.
-
-```sh
-cd ~/hub/ai/utils/aiview
-go build -o aiview .
-./aiview status
-./aiview tui
-```
-
-Install on your command path:
+## Install
 
 ```sh
-go install .
-# Add $(go env GOPATH)/bin to PATH if needed.
+go build -o ~/bin/o-ai .
+o-ai help            # the commands
+o ai skill list      # through the o root
+mtm ai skill list    # through mtm (its second lookup prefix is o)
 ```
+
+Until ochazuke and oden are tagged, `go.mod` replaces them with the local checkouts in `~/proj`.
 
 ## Commands
 
+The nouns are an ochazuke runtime behind `ochazuke/cli`: `o-ai NOUN VERB [ENTRY] [--ARG VALUE] [--target ROW_ID]`.
+
+| Noun | Verbs | A row's data (the record aiview printed) |
+| --- | --- | --- |
+| `harness` | list, show | `Harness` |
+| `provider` | list, show | `Provider` |
+| `model` | list, show, select | `Model` (`cliSlug`, `args`, `thinking`) |
+| `thinking` | list, show | the level with `model`, `cliSlug`, `launchArgs` |
+| `skill` | list, show | `Resource` (path, resolvedPath, frontmatter, content) |
+| `agent` | list, show | `Resource` |
+| `settings` | list, show | `Setting` |
+| `status` | list, show | list: counts per kind; show: the whole inventory |
+
 ```sh
-aiview harness list
-aiview provider list --harness omp
-aiview model list --harness omp
-aiview model show openai-codex/gpt-6-sol --harness omp
-aiview thinking list --model openai-codex/gpt-6-sol --harness omp
-aiview thinking show max --model openai-codex/gpt-6-sol --harness omp
-
-aiview model show opus --harness claude
-aiview model select opus --harness claude
-aiview model show
-
-aiview skill list --search review
-aiview agent show scout --harness omp
-aiview settings list --harness codex
-aiview status --json
+o ai harness list
+o ai model list --harness omp
+o ai model show openai-codex/gpt-6-sol --harness omp
+o ai thinking list --model openai-codex/gpt-6-sol --harness omp
+o ai model select opus --harness claude
+o ai model show                       # the saved selection
+o ai skill list --search review
+o ai skill show --target skill/skill:claude:/Users/me/.claude/skills/review/SKILL.md
+o ai skills                           # a plural is NOUN list
+o ai status show                      # the full inventory, warnings included
+o ai                                  # status list
+o-ai catalog                          # the nouns and verbs, for a host
 ```
 
-`list model` and `show model ID` also work. Every command word accepts a unique prefix. `mo li`, `prov sh`, `th li`, and `mo se` work. `s` is ambiguous between settings, show, skill, and status. `mo s` is ambiguous between select and show. Ambiguity is an error, never a first-match selection. Plural resource names are accepted.
+A list is rows:
 
-A model's stable inventory ID includes its harness and provider, such as `omp:openai-codex/gpt-6-sol`. Its `cliSlug` is the actual harness argument, such as `openai-codex/gpt-6-sol`. Native metadata is preserved in `metadata`, including context limits, pricing, modalities, capabilities, resolved aliases, and reasoning descriptions when supplied by the source.
-
-Model details include argument arrays rather than shell-interpolated command strings:
-
-```json
-{
-  "harness": "omp",
-  "name": "GPT-6 Sol",
-  "cliSlug": "openai-codex/gpt-6-sol",
-  "args": ["omp", "--model", "openai-codex/gpt-6-sol"],
-  "thinking": [
-    {"slug": "xhigh", "name": "Extra high", "args": ["--thinking", "xhigh"]}
-  ]
+```js
+row = {
+  id: "model/omp:openai-codex/gpt-6-sol",   // NOUN/ inventory id; pass it as --target
+  label: "GPT-6 Sol [omp]",                 // name, then the harness(es)
+  data: { id: "omp:openai-codex/gpt-6-sol", harness: "omp", cliSlug: "openai-codex/gpt-6-sol",
+          args: ["omp", "--model", "openai-codex/gpt-6-sol"], thinking: [/* ... */] /* ... */ },
 }
 ```
 
-Claude uses `--effort`, Codex uses `-c 'model_reasoning_effort="..."'`, and OpenCode uses `--variant`. Thinking entries include the complete `launchArgs` array. OpenCode variants are reported as variants, not assumed to mean reasoning effort. Non-chat OMP catalog entries have empty launch arrays rather than an invalid chat command.
+and `show` prints the `data` record alone, unchanged from aiview.
 
-`model select` saves only aiview's selection, in `~/.config/aiview/selection.json`, with mode `0600`. It does not change a harness's selected model. Selecting a model with multiple matches requires an exact ID or a harness/provider filter.
+Words: a noun is resolved by unique prefix (`mo` is model, `sk` is skill; `s` is ambiguous between settings, skill and status), a verb too (`mo li`, `mo se`; `mo s` is ambiguous between select and show). Ambiguity is an error, never a first match. A bare word after `show` or `select` is ENTRY (an id, name, slug or path; with several matches it is an error listing them, so narrow with `--harness`/`--provider` or use an id). After `list`, a bare word fills `--harness`.
 
-### Options
+### Parameters
 
-| Option | Behavior |
+| Parameter | Behavior |
 | --- | --- |
 | `--harness NAME` | Filter by exact harness ID |
 | `--provider NAME` | Filter by exact provider slug |
@@ -74,36 +72,44 @@ Claude uses `--effort`, Codex uses `-c 'model_reasoning_effort="..."'`, and Open
 | `--home DIRECTORY` | Use another home for file discovery and child processes |
 | `--timeout 15s` | Per-metadata-command deadline |
 | `--no-probe` | Skip native harness commands; inspect files and caches only |
-| `--json` | Emit structured JSON on stdout |
+| `--json '{...}'` | The parameters as one JSON object (`--json '{"harness":"omp"}'`) |
+| `--target ROW_ID` | The row a show or select acts on (an `id` from the list) |
 
-Flags may appear before or after command words. `status --json` emits the complete inventory, including warnings. Resource list/show commands emit the selected records. Environment-based configuration roots still take precedence over `--home`; clear them when inspecting an isolated home.
+Parameters come after NOUN VERB. Collection warnings go to stderr.
 
-## Terminal browser
+A model's stable inventory ID includes its harness and provider, such as `omp:openai-codex/gpt-6-sol`. Its `cliSlug` is the actual harness argument. Native metadata is preserved in `metadata`, including context limits, pricing, modalities, capabilities, resolved aliases, and reasoning descriptions when supplied by the source. Model details include argument arrays rather than shell-interpolated command strings. Claude uses `--effort`, Codex uses `-c 'model_reasoning_effort="..."'`, and OpenCode uses `--variant`. Thinking entries include the complete `launchArgs` array. Non-chat OMP catalog entries have empty launch arrays.
+
+`model select` saves only o-ai's selection, in `~/.config/aiview/selection.json` (aiview's file, kept so an existing selection survives the rename), mode `0600`. It does not change a harness's selected model.
+
+### From aiview
+
+| aiview | o-ai |
+| --- | --- |
+| `aiview model list --harness omp` | `o ai model list --harness omp` |
+| `aiview list model`, `aiview show model ID` | `o ai model list`, `o ai model show ID` (the verb-first spelling is gone) |
+| `aiview status`, `aiview status --json` | `o ai status list` (counts), `o ai status show` (the inventory) |
+| `aiview NOUN list --json` (array of records) | `o ai NOUN list` (rows; each record is a row's `data`) |
+| `--json` (JSON output) | gone: output is always JSON; `--json` now takes the parameters as an object |
+| flags before the command words | flags after NOUN VERB |
+| `aiview tui` | `o tui`, after `o-nabe extension register o-ai` |
+| `aiview --help` | `o-ai help` |
+
+## The TUI is nabe
 
 ```sh
-aiview tui --project ~/proj/example
+MTM_SERVER=default o-nabe extension register o-ai   # registers as "ai"
+o tui                                               # a page ai with one list per noun
 ```
 
-The list and detail panes share the CLI inventory. Enter opens a full-width, scrollable detail view.
+Restart nabe after `o-nabe extension refresh o-ai`. A row's verbs run as `o-ai NOUN VERB --target ROW_ID --json '{}' --yes`.
 
-| Key | Action |
-| --- | --- |
-| Tab / Shift-Tab | Next / previous category |
-| Up/Down or k/j | Select an entry |
-| Enter / Esc | Expand details / return |
-| Page Up / Page Down | Page through list or expanded details |
-| `/` | Search the current category; Enter finishes editing |
-| `h` | Cycle harness filters |
-| `m` on a provider | Browse that provider's models |
-| `t` on a model | Browse that model's thinking levels |
-| `s` on a model | Save the CLI model selection |
-| `b` | Clear filters |
-| `r` | Refresh the inventory |
-| `w` | Inspect collection warnings |
-| `o` | Browse folders or inspect a configuration file |
-| `q` / Ctrl-C | Quit |
+## Next
 
-In the file picker, Right opens a directory, Enter selects a folder or configuration file, Space uses the current directory as the project, and Esc cancels. Files are parsed and redacted before display. The browser requires at least 55 columns and 13 rows.
+The nouns still to come, as verbs on this runtime: `mcp` (servers from `~/.claude.json`, `.mcp.json`, `~/.codex/config.toml`, omp), `mcp-tool` (start a stdio server, `initialize` + `tools/list`, stop it; pending work), and richer `agent` verbs. A sources file (`~/.config/o-ai/sources.json`) for roots the collectors do not discover, such as `~/proj/ai-tools/catalog/skills`, would be data merged over the built-ins by name:
+
+```js
+sources = { skills: [{ name: "ai-tools", path: "~/proj/ai-tools/catalog/skills" }] }
+```
 
 ## Data sources and limits
 
@@ -129,7 +135,7 @@ Settings retain file provenance and scope rather than claiming to reproduce ever
 
 ## Safety
 
-Aiview does not edit harness settings or launch an inference request. Native metadata commands can update their own caches and load trusted harness configuration. OMP bundled agents are exported into an owned temporary directory, read, then removed. Use `--no-probe` when only file inspection is wanted.
+o-ai does not edit harness settings or launch an inference request. Native metadata commands can update their own caches and load trusted harness configuration. OMP bundled agents are exported into an owned temporary directory, read, then removed. Use `--no-probe` when only file inspection is wanted.
 
 Settings and metadata redact secret-bearing fields, credential/header/environment containers, command hooks, recognized token formats, and URL credentials/query strings. Resource bodies remain inspectable with recognized token formats redacted. This is not a guarantee that arbitrary prose cannot contain a secret; do not publish a full inventory without reviewing it.
 
@@ -141,4 +147,4 @@ go vet ./...
 go build .
 ```
 
-The tests cover command ambiguity, model selection, reasoning arguments, credential redaction, JSONC/TOML parsing, invalid configuration visibility, symlink cycles, non-chat launch handling, and script-based process identity. Real native commands and the interactive browser must also be exercised after adapter or UI changes.
+The tests cover command ambiguity, the catalog (schema 1, `rows` on every list), row ids and `--target`, model selection, reasoning arguments, credential redaction, JSONC/TOML parsing, invalid configuration visibility, symlink cycles, non-chat launch handling, and script-based process identity. Real native commands must also be exercised after adapter changes (`o-ai status show`), and the nabe page after catalog changes (`o-nabe extension refresh o-ai && o-tui --smoke`).
