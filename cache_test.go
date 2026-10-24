@@ -136,22 +136,30 @@ func TestCorruptCacheRecollects(t *testing.T) {
 // covers every noun's need, rows by noun with ids and labels only.
 func TestStateAnswersEveryListInOneCollection(t *testing.T) {
 	w := newCacheWorld(t)
-	var state map[string][]map[string]any
-	if err := json.Unmarshal([]byte(w.run("status", "state")), &state); err != nil {
-		t.Fatal(err)
+	state := map[string][]map[string]any{}
+	for _, line := range strings.Split(strings.TrimSpace(w.run("status", "state")), "\n") {
+		var row map[string]any
+		if err := json.Unmarshal([]byte(line), &row); err != nil {
+			t.Fatalf("%v: %q", err, line)
+		}
+		noun, _ := row["noun"].(string)
+		state[noun] = append(state[noun], row)
 	}
 	if len(w.needs) != 1 || w.needs[0] != needAll {
 		t.Fatalf("collections %+v, want one of everything", w.needs)
 	}
-	for _, noun := range nouns {
-		if _, ok := state[noun]; !ok {
-			t.Errorf("state lacks %s", noun)
-		}
+	// A noun with no records has no lines; the fake inventory has a skill
+	// and the status counts.
+	if len(state) != 2 || len(state["status"]) != 6 {
+		t.Fatalf("state nouns %v", state)
 	}
 	if rows := state["skill"]; len(rows) != 1 || rows[0]["id"] != "skill/skill:claude:/s/SKILL.md" || rows[0]["label"] != "s [claude]" || rows[0]["data"] != nil {
 		t.Fatalf("skill rows %+v", rows)
 	}
-	w.run("skill", "list") // covered by the state's collection
+	out := w.run("skill", "list", "--format", "jsonl") // covered by the state's collection
+	if !strings.HasPrefix(out, `{"noun":"skill","id":"skill/skill:claude:/s/SKILL.md","label":"s [claude]","data":{`) || !strings.Contains(out, `"path":"/s/SKILL.md"`) || strings.Count(out, "\n") != 1 {
+		t.Fatalf("list --format jsonl: %q", out)
+	}
 	w.run("status", "state", "--fresh")
 	if len(w.needs) != 2 {
 		t.Fatalf("list after state, then state --fresh: %d collections", len(w.needs))

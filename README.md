@@ -41,7 +41,8 @@ o ai skill list --search review
 o ai skill show --target skill/skill:claude:/Users/me/.claude/skills/review/SKILL.md
 o ai skills                           # a plural is NOUN list
 o ai status show                      # the full inventory, warnings included
-o ai status state                     # every noun's rows from one collection (the catalog's state)
+o ai status state                     # every noun's rows from one collection, JSON Lines (the catalog's state)
+o ai skill list --format jsonl        # one {noun, id, label, data} per line
 o ai                                  # status list
 o-ai catalog                          # the nouns and verbs, for a host
 ```
@@ -110,17 +111,16 @@ o tui                                               # a page ai with one list pe
 
 Restart nabe after `o-nabe extension refresh o-ai`. A row's verbs run as `o-ai NOUN VERB --target ROW_ID --json '{}' --yes`.
 
-`status state` is the catalog's state source (`"state": "status.state"`, the ochazuke/cli convention): one process, one collection covering every noun's need, processes inspected once, answering every list:
+`status state` is the catalog's state source (`"state": "status.state"`, the ochazuke/cli convention): one process, one collection covering every noun's need, processes inspected once, answering every list as JSON Lines, one row per line tagged with its noun, no outer array:
 
 ```js
-state = {
-  harness: [{ id: "harness/claude", label: "Claude Code" }, /* ... */],
-  skill:   [{ id: "skill/skill:claude:/Users/me/.claude/skills/review/SKILL.md", label: "review [claude]" }, /* 1,800 more */],
-  /* provider, model, thinking, agent, settings, status */
-}
+// o-ai status state
+{"noun":"harness","id":"harness/claude","label":"Claude Code"}
+{"noun":"skill","id":"skill/skill:claude:/Users/me/.claude/skills/review/SKILL.md","label":"review [claude]"}
+// ... every row of harness, provider, model, thinking, skill, agent, settings, status
 ```
 
-Rows carry only id and label (no `data`): a host's list needs nothing else, and `show --target ID` prints the record. nabe runs it once at startup, then on its refresh interval, after a verb of the extension and on `extension refresh` (with `--fresh`), instead of eight `NOUN list` processes.
+State rows carry only `noun`, `id` and `label` (no `data`): a host's list reads nothing else and `show --target ID` prints the record, so the answer is about 1 MB instead of the 5.3 MB the eight lists printed with their records. A noun with no records has no lines. `NOUN list --format jsonl` prints the same line shape with `data` (the default `json` stays an array). nabe runs `status state` once at startup, then on its refresh interval, after a verb of the extension and on `extension refresh` (with `--fresh`), instead of eight `NOUN list` processes.
 
 ## Next
 

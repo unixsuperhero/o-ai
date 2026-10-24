@@ -93,6 +93,10 @@ var collectParams = map[string]ochazuke.Parameter{
 	"ttl":      {Type: "string", Description: "how old a cached inventory may be, a Go duration (default 5m; 0s collects)"},
 }
 
+var formatParam = map[string]ochazuke.Parameter{
+	"format": {Type: "string", Enum: []string{"json", "jsonl"}, Description: "json (an array, the default) or jsonl (one {noun, id, label, data} per line, the state's shape)"},
+}
+
 var filterParams = map[string]ochazuke.Parameter{
 	"harness":  {Type: "string", Description: "exact harness id, e.g. omp, claude, codex"},
 	"provider": {Type: "string", Description: "exact provider slug"},
@@ -147,14 +151,28 @@ func (t *Tool) shell() *ocli.Shell {
 		}
 		return rows, lists[noun].SetItems(items)
 	}
+	// listed is a list verb's answer: a JSON array, or JSON Lines tagged
+	// with the noun under --format jsonl (the state's line shape).
+	listed := func(noun string, args ochazuke.Arguments) ochazuke.Result {
+		rows, err := load(noun, args)
+		switch format := ochazuke.StringArg(args, "format", "json"); {
+		case err != nil:
+			return ochazuke.Failed(err)
+		case format == "jsonl":
+			return ochazuke.Done(lines(noun, rows))
+		case format != "json":
+			return ochazuke.Failed(fmt.Errorf("unknown --format %q: json or jsonl", format))
+		}
+		return ochazuke.Done(rows)
+	}
 	for _, noun := range categories {
 		b := r.Define(noun).
-			Verb("list", func(c ochazuke.Ctx) ochazuke.Result { return result(load(noun, c.Args)) },
-				"the "+noun+" rows: {id, label, data}, data the inventory record").Rows(noun).
+			Verb("list", func(c ochazuke.Ctx) ochazuke.Result { return listed(noun, c.Args) },
+				"the "+noun+" rows: {id, label, data}, data the inventory record (--format jsonl: one tagged row per line)").Rows(noun).
 			Verb("show", func(c ochazuke.Ctx) ochazuke.Result { return result(t.show(noun, c, false)) },
 				"one "+noun+" record: ENTRY (an id, name, slug or path) or --target ROW_ID")
 		params := merged(collectParams, filterParams)
-		r.Operations[noun+".list"] = withParams(r.Operations[noun+".list"], params)
+		r.Operations[noun+".list"] = withParams(r.Operations[noun+".list"], merged(params, formatParam))
 		r.Operations[noun+".show"] = withParams(r.Operations[noun+".show"], merged(params, entryParam))
 		if noun == "model" {
 			b.Verb("select", func(c ochazuke.Ctx) ochazuke.Result { return result(t.show(noun, c, true)) },
@@ -163,7 +181,7 @@ func (t *Tool) shell() *ocli.Shell {
 		}
 	}
 	r.Define("status").
-		Verb("list", func(c ochazuke.Ctx) ochazuke.Result { return result(load("status", c.Args)) },
+		Verb("list", func(c ochazuke.Ctx) ochazuke.Result { return listed("status", c.Args) },
 			"how many records of each kind: {id, label, data: {kind, count}}").Rows("status").
 		Verb("show", func(c ochazuke.Ctx) ochazuke.Result {
 			o, _, err := t.options(c.Args)
@@ -176,7 +194,7 @@ func (t *Tool) shell() *ocli.Shell {
 		Verb("state", func(c ochazuke.Ctx) ochazuke.Result { return result(t.state(c.Args)) },
 			"every list's rows in one collection: {NOUN: [{id, label}]} for "+strings.Join(nouns, ", ")+" (the catalog's state)").State()
 	r.Operations["status.state"] = withParams(r.Operations["status.state"], merged(collectParams, filterParams))
-	r.Operations["status.list"] = withParams(r.Operations["status.list"], collectParams)
+	r.Operations["status.list"] = withParams(r.Operations["status.list"], merged(collectParams, formatParam))
 	r.Operations["status.show"] = withParams(r.Operations["status.show"], collectParams)
 
 	sh := ocli.New(r, "o-ai", t.Stdin, t.Stdout, t.Stderr)
@@ -220,8 +238,10 @@ func nounRows(noun string, in Inventory, o Options, model string, withData bool)
 }
 
 // state is the catalog's state source: one collection covering every
-// noun's need, processes inspected once, and every list's rows by noun.
-func (t *Tool) state(args ochazuke.Arguments) (map[string][]Row, error) {
+// noun's need, processes inspected once, and every list's rows as JSON
+// Lines tagged by noun (ochazuke/cli Row). Rows carry id and label only:
+// a host's list reads nothing else, and show prints the record.
+func (t *Tool) state(args ochazuke.Arguments) (ocli.Lines, error) {
 	o, model, err := t.options(args)
 	if err != nil {
 		return nil, err
@@ -234,13 +254,24 @@ func (t *Tool) state(args ochazuke.Arguments) (map[string][]Row, error) {
 		need.RuntimeAgents = need.RuntimeAgents || n.RuntimeAgents
 	}
 	in := t.inventory(o, need)
-	out := make(map[string][]Row, len(nouns))
+	var out ocli.Lines
 	for _, noun := range nouns {
-		if out[noun], err = nounRows(noun, in, o, model, false); err != nil {
+		rows, err := nounRows(noun, in, o, model, false)
+		if err != nil {
 			return nil, err
 		}
+		out = append(out, lines(noun, rows)...)
 	}
 	return out, nil
+}
+
+// lines is rows as JSON Lines tagged with their noun.
+func lines(noun string, rows []Row) ocli.Lines {
+	out := make(ocli.Lines, len(rows))
+	for i, r := range rows {
+		out[i] = ocli.Row{Noun: noun, ID: r.ID, Label: r.Label, Data: r.Data}
+	}
+	return out
 }
 
 func withParams(op ochazuke.Operation, p map[string]ochazuke.Parameter) ochazuke.Operation {
