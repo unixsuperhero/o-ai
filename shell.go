@@ -24,20 +24,33 @@ import (
 // nouns are the runtime's nouns: the inventory kinds, then status.
 var nouns = append(append([]string{}, categories...), "status")
 
-// listOmit names, per noun, the bulky fields a list row's data leaves out
-// (multi-KB at the long tail); show still prints the whole record.
-var listOmit = map[string][]string{
-	"skill":    {"content"},
-	"agent":    {"content"},
-	"model":    {"metadata"},
-	"harness":  {"settings"},
-	"provider": {"models"},
+// nounSpec is what a noun's verbs read: the bulky fields a list row's data
+// leaves out (multi-KB at the long tail; show still prints the whole
+// record) and the costly parts of a collection they need.
+type nounSpec struct {
+	omit []string
+	need Need
+}
+
+var catalogs = Need{Catalogs: true}
+
+// specs are the nouns' needs. Resource and settings lists read files only;
+// harness and status read everything, processes included.
+var specs = map[string]nounSpec{
+	"harness":  {omit: []string{"settings"}, need: needAll},
+	"provider": {omit: []string{"models"}, need: catalogs},
+	"model":    {omit: []string{"metadata"}, need: catalogs},
+	"thinking": {need: catalogs},
+	"skill":    {omit: []string{"content"}},
+	"agent":    {omit: []string{"content"}, need: Need{RuntimeAgents: true}},
+	"settings": {},
+	"status":   {need: needAll},
 }
 
 // lean is a record as a list row carries it: its JSON without the noun's
-// listOmit fields, every other key unchanged.
+// omit fields, every other key unchanged.
 func lean(noun string, v any) (any, error) {
-	omit := listOmit[noun]
+	omit := specs[noun].omit
 	if len(omit) == 0 {
 		return v, nil
 	}
@@ -76,6 +89,8 @@ var collectParams = map[string]ochazuke.Parameter{
 	"home":     {Type: "string", Description: "alternate home for file discovery and child processes"},
 	"timeout":  {Type: "string", Description: "per metadata command deadline, a Go duration (default 15s)"},
 	"no-probe": {Type: "boolean", Description: "files only; do not run harness metadata commands"},
+	"fresh":    {Type: "boolean", Description: "collect now even if the inventory cache is young"},
+	"ttl":      {Type: "string", Description: "how old a cached inventory may be, a Go duration (default 30s; 0s collects)"},
 }
 
 var filterParams = map[string]ochazuke.Parameter{
@@ -122,7 +137,7 @@ func (t *Tool) shell() *ocli.Shell {
 		if err != nil {
 			return nil, err
 		}
-		in := t.inventory(o)
+		in := t.inventory(o, specs[noun].need)
 		rows := []Row{}
 		items := []ochazuke.ListItem{}
 		add := func(id, label string, value any) {
@@ -169,7 +184,7 @@ func (t *Tool) shell() *ocli.Shell {
 			if err != nil {
 				return ochazuke.Failed(err)
 			}
-			return ochazuke.Done(t.inventory(o))
+			return ochazuke.Done(t.inventory(o, specs["status"].need))
 		}, "the whole inventory, warnings included")
 	r.Operations["status.list"] = withParams(r.Operations["status.list"], collectParams)
 	r.Operations["status.show"] = withParams(r.Operations["status.show"], collectParams)
@@ -223,7 +238,7 @@ func (t *Tool) show(noun string, c ochazuke.Ctx, sel bool) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows := filterModel(t.inventory(o).Entries(noun, o), model)
+	rows := filterModel(t.inventory(o, specs[noun].need).Entries(noun, o), model)
 	var row Entry
 	var id string
 	if c.Instance != nil && c.Instance.Noun == noun {
@@ -273,12 +288,21 @@ func (t *Tool) options(args ochazuke.Arguments) (Options, string, error) {
 		Search:   ochazuke.StringArg(args, "search", ""),
 	}
 	o.NoProbe, _ = args["no-probe"].(bool)
+	o.Fresh, _ = args["fresh"].(bool)
 	if v := ochazuke.StringArg(args, "timeout", ""); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil || d <= 0 {
 			return o, "", fmt.Errorf("invalid positive duration %q", v)
 		}
 		o.Timeout = d
+	}
+	o.TTL = defaultTTL
+	if v := ochazuke.StringArg(args, "ttl", ""); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < 0 {
+			return o, "", fmt.Errorf("invalid --ttl %q (a duration, 0s or more)", v)
+		}
+		o.TTL = d
 	}
 	var err error
 	if o.Home, err = filepath.Abs(expandPath(o.Home, t.Home, t.Cwd)); err != nil {
@@ -295,19 +319,32 @@ func (t *Tool) options(args ochazuke.Arguments) (Options, string, error) {
 	return o, ochazuke.StringArg(args, "model", ""), nil
 }
 
-// inventory collects once per collection option set, printing the
-// warnings to Stderr the first time.
-func (t *Tool) inventory(o Options) Inventory {
-	key := Options{Home: o.Home, Project: o.Project, Timeout: o.Timeout, NoProbe: o.NoProbe}
-	if in, ok := t.cache[key]; ok {
-		return in
+// inventory is the collection need asks for: this process's, else the
+// cache file's (cache.go), else a new one; warnings go to Stderr the first
+// time. Processes are inspected afresh on every call that needs them.
+func (t *Tool) inventory(o Options, need Need) Inventory {
+	if o.NoProbe {
+		need.Catalogs, need.RuntimeAgents = false, false // nothing to probe
 	}
-	in := Collect(key)
-	printWarnings(t.Stderr, in)
-	if t.cache == nil {
-		t.cache = map[Options]Inventory{}
+	key := cacheKey(o)
+	e, ok := t.cache[key]
+	if !ok || !e.Need.covers(need) {
+		e = cacheEntry{Need: need, Inventory: t.cachedInventory(o, key, need)}
+		printWarnings(t.Stderr, e.Inventory)
+		if t.cache == nil {
+			t.cache = map[string]cacheEntry{}
+		}
+		t.cache[key] = e
 	}
-	t.cache[key] = in
+	in := e.Inventory
+	if need.Processes {
+		in.Harnesses = append([]Harness{}, in.Harnesses...)
+		in.Warnings = append([]string{}, in.Warnings...)
+		for i := range in.Harnesses {
+			in.Harnesses[i].PIDs = []int{}
+		}
+		inspectProcesses(&in, o)
+	}
 	return in
 }
 

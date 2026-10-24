@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	ocli "github.com/unixsuperhero/ochazuke/cli"
 	"github.com/unixsuperhero/oden"
@@ -41,7 +42,9 @@ type Tool struct {
 	Home, Cwd      string
 	Prog           string // "o ai" under o, "mtm ai" under mtm, else "o-ai"; messages only
 
-	cache map[Options]Inventory // one collection per option set per process
+	cache   map[string]cacheEntry         // this process's collections, by cache key
+	collect func(Options, Need) Inventory // CollectNeed unless a test counts collections
+	now     func() time.Time              // time.Now unless a test sets the clock
 }
 
 func main() {

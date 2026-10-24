@@ -27,20 +27,30 @@ const maxInput = 32 << 20
 
 type collector struct {
 	options   Options
+	need      Need
 	inventory Inventory
 	harness   Harness
 	root      string
 	settings  map[string]any
 }
 
+// Collect is the whole inventory, processes included.
 func Collect(o Options) Inventory {
+	in := CollectNeed(o, needAll)
+	inspectProcesses(&in, o)
+	return in
+}
+
+// CollectNeed is the inventory with only need's costly parts; it never
+// inspects processes (inspectProcesses does, per call).
+func CollectNeed(o Options, need Need) Inventory {
 	in := Inventory{CapturedAt: time.Now().UTC(), Project: o.Project}
 	ids := []string{"omp", "claude", "codex", "pi", "opencode", "gemini", "clawed"}
 	results := make([]Inventory, len(ids))
 	var wg sync.WaitGroup
 	for i, id := range ids {
 		wg.Add(1)
-		go func(i int, id string) { defer wg.Done(); results[i] = collectHarness(o, id) }(i, id)
+		go func(i int, id string) { defer wg.Done(); results[i] = collectHarness(o, need, id) }(i, id)
 	}
 	wg.Wait()
 	for _, result := range results {
@@ -54,12 +64,11 @@ func Collect(o Options) Inventory {
 	sort.Slice(in.Models, func(i, j int) bool { return in.Models[i].ID < in.Models[j].ID })
 	in.Skills = mergeResources(in.Skills)
 	in.Agents = mergeResources(in.Agents)
-	inspectProcesses(&in, o)
 	return in
 }
 
-func collectHarness(o Options, id string) Inventory {
-	c := collector{options: o, harness: Harness{ID: id, PIDs: []int{}, Settings: []Setting{}, CatalogStatus: "unavailable", ProcessStatus: "unknown"}, settings: map[string]any{}}
+func collectHarness(o Options, need Need, id string) Inventory {
+	c := collector{options: o, need: need, harness: Harness{ID: id, PIDs: []int{}, Settings: []Setting{}, CatalogStatus: "unavailable", ProcessStatus: "unknown"}, settings: map[string]any{}}
 	exe, err := exec.LookPath(id)
 	if err == nil {
 		c.harness.Installed = true
@@ -137,14 +146,14 @@ func collectHarness(o Options, id string) Inventory {
 		c.harness.Settings = append(c.harness.Settings, Setting{Path: p.path, Scope: p.scope, Values: object(redact(settings, ""))})
 	}
 	if c.harness.Installed && !o.NoProbe {
-		switch id {
-		case "omp":
+		switch {
+		case id == "omp" && need.Catalogs:
 			c.ompModels()
-		case "claude", "clawed":
+		case (id == "claude" || id == "clawed") && (need.Catalogs || need.RuntimeAgents): // models and runtime agents
 			c.claudeModels()
-		case "pi":
+		case id == "pi" && need.Catalogs:
 			c.piModels()
-		case "opencode":
+		case id == "opencode" && need.Catalogs:
 			c.openCodeModels()
 		}
 	}

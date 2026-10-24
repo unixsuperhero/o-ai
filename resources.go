@@ -50,7 +50,7 @@ func (c *collector) discoverResources() {
 		for _, dir := range stringList(object(c.settings["skills"])["customDirectories"]) {
 			roots = append(roots, resourceRoot{expandPath(dir, c.options.Home, c.options.Project), "skill", "configured", access})
 		}
-		if c.harness.Installed && !c.options.NoProbe {
+		if c.harness.Installed && !c.options.NoProbe && c.need.RuntimeAgents {
 			c.ompBundledAgents()
 		} else if executable, err := filepath.EvalSymlinks(c.harness.Executable); err == nil {
 			root := filepath.Dir(filepath.Dir(executable))

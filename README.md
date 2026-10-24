@@ -56,7 +56,7 @@ row = {
 }
 ```
 
-and `show` prints the whole record alone, unchanged from aiview. A list row's `data` is that record without its bulky fields, so a list stays small: skill and agent drop `content`, model `metadata`, harness `settings` (the settings noun lists them), provider `models` (`listOmit` in `shell.go`).
+and `show` prints the whole record alone, unchanged from aiview. A list row's `data` is that record without its bulky fields, so a list stays small: skill and agent drop `content`, model `metadata`, harness `settings` (the settings noun lists them), provider `models` (`specs` in `shell.go`).
 
 Words: a noun is resolved by unique prefix (`mo` is model, `sk` is skill; `s` is ambiguous between settings, skill and status), a verb too (`mo li`, `mo se`; `mo s` is ambiguous between select and show). Ambiguity is an error, never a first match. A bare word after `show` or `select` is ENTRY (an id, name, slug or path; with several matches it is an error listing them, so narrow with `--harness`/`--provider` or use an id). After `list`, a bare word fills `--harness`.
 
@@ -72,10 +72,16 @@ Words: a noun is resolved by unique prefix (`mo` is model, `sk` is skill; `s` is
 | `--home DIRECTORY` | Use another home for file discovery and child processes |
 | `--timeout 15s` | Per-metadata-command deadline |
 | `--no-probe` | Skip native harness commands; inspect files and caches only |
+| `--fresh` | Collect now, even if the inventory cache is young |
+| `--ttl 30s` | How old a cached inventory may be (`0s` always collects) |
 | `--json '{...}'` | The parameters as one JSON object (`--json '{"harness":"omp"}'`) |
 | `--target ROW_ID` | The row a show or select acts on (an `id` from the list) |
 
 Parameters come after NOUN VERB. Collection warnings go to stderr.
+
+### The inventory cache
+
+A collection is cached in `$XDG_CACHE_HOME/o-ai/inventory.json` (else `~/.cache/o-ai/inventory.json`), mode `0600`, so a host that lists every noun (nabe, at mount and refresh) collects once. An entry is keyed by what changes the inventory: `--home`, `--project`, `--timeout`, `--no-probe` and the harness environment (`PATH`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, ...); the filters apply after collection and share it. It serves a verb while younger than `--ttl` (30 s) and when it holds what the noun needs: skill and settings read files only, agent adds the runtime agents (Claude initialization, OMP's exporter), provider, model and thinking add the native catalogs, harness and status everything. Process status is never cached; harness and status inspect processes on every call. The file is replaced atomically under `inventory.json.lock`, so concurrent callers wait for one collection; a missing or corrupt file means collecting, never an error.
 
 A model's stable inventory ID includes its harness and provider, such as `omp:openai-codex/gpt-6-sol`. Its `cliSlug` is the actual harness argument. Native metadata is preserved in `metadata`, including context limits, pricing, modalities, capabilities, resolved aliases, and reasoning descriptions when supplied by the source. Model details include argument arrays rather than shell-interpolated command strings. Claude uses `--effort`, Codex uses `-c 'model_reasoning_effort="..."'`, and OpenCode uses `--variant`. Thinking entries include the complete `launchArgs` array. Non-chat OMP catalog entries have empty launch arrays.
 

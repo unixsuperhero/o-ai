@@ -14,20 +14,22 @@ The AI hub's data tool (`o-ai`, so `o ai` and `mtm ai`). An oden app with an och
 | Concern | File |
 |---|---|
 | `Tool`, `main`, the oden app, `mount` (this tool's nouns as commands, plus `catalog`), plurals and the bare default, model selection file | `main.go` |
-| The runtime: nouns and verbs, parameters, rows, `Reveal`, `show`/`select`, option parsing, the per-process collection cache | `shell.go` |
+| The runtime: nouns and verbs, `specs` (each noun's lean-row fields and collection `Need`), parameters, rows, `Reveal`, `show`/`select`, option parsing, the per-process collection cache | `shell.go` |
+| The inventory cache file (`~/.cache/o-ai/inventory.json`): key, TTL, lock, atomic write | `cache.go` |
 | Inventory types, `Entries` (the projection every list reads), `categories` | `inventory.go` |
 | Collection: harness probing, settings parsing and redaction, processes, models and providers | `collect.go`, `catalogs.go` |
 | Skill and agent discovery, frontmatter, merging by path | `resources.go` |
-| Tests: collectors and redaction (`main_test.go`), catalog, rows and `--target` (`shell_test.go`) | `*_test.go` |
+| Tests: collectors and redaction (`main_test.go`), catalog, rows and `--target` (`shell_test.go`), the cache (`cache_test.go`) | `*_test.go` |
 
 ## Invariants
 
-- A list's rows are `{id: "NOUN/ENTRY_ID", label, data}`; `show` prints the inventory record in the shape aiview always printed, and `data` is that record minus the noun's `listOmit` fields (content, metadata, ...). Change a record's JSON only with its consumers.
+- A list's rows are `{id: "NOUN/ENTRY_ID", label, data}`; `show` prints the inventory record in the shape aiview always printed, and `data` is that record minus the noun's `specs` omit fields (content, metadata, ...). Change a record's JSON only with its consumers.
 - Every list verb declares `.Rows(noun)`; `TestCatalogDeclaresRowsForEveryNoun` pins it.
 - No TUI code and no key bindings here; a host renders. Never bind function keys.
 - No verb-specific branches outside the runtime: a feature is a noun, its verbs and rows. The collectors know no command line.
 - Read-only: nothing edits a harness's settings or sends an inference request. `model select` writes only `~/.config/aiview/selection.json`.
-- `--no-probe` in every test that collects: tests never run the real harnesses.
+- `--no-probe` in every test that collects: tests never run the real harnesses. `TestMain` points `XDG_CACHE_HOME` at a temporary directory: tests never touch the user's cache.
+- A noun's collection cost is data (`specs[noun].need`), never a switch on its name; processes are never cached.
 
 ## Every commit
 

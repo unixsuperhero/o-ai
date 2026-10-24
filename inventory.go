@@ -16,6 +16,25 @@ type Options struct {
 	Harness  string
 	Provider string
 	Search   string
+	Fresh    bool          // collect even when the cache holds a young inventory
+	TTL      time.Duration // how old a cached inventory may be
+}
+
+// Need is the costly parts of a collection a noun reads; files (settings,
+// skill and agent files, codex's model cache) are always collected.
+type Need struct {
+	Processes     bool `json:"processes"`     // ps: harness pids and process status; never cached
+	Catalogs      bool `json:"catalogs"`      // native model catalogs (omp, claude, pi, opencode)
+	RuntimeAgents bool `json:"runtimeAgents"` // claude initialization agents, omp's bundled agent exporter
+}
+
+// needAll is every part: what Collect gathers.
+var needAll = Need{Processes: true, Catalogs: true, RuntimeAgents: true}
+
+// covers reports whether a collection made for n holds everything want
+// reads, processes aside (they are inspected per call).
+func (n Need) covers(want Need) bool {
+	return (n.Catalogs || !want.Catalogs) && (n.RuntimeAgents || !want.RuntimeAgents)
 }
 
 type Setting struct {
