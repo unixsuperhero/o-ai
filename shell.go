@@ -75,7 +75,7 @@ const Version = "0.1.0"
 type Row struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
-	Data  any    `json:"data"`
+	Data  any    `json:"data,omitempty"`
 }
 
 // StatusCount is a status row's data: how many records of a kind.
@@ -90,7 +90,7 @@ var collectParams = map[string]ochazuke.Parameter{
 	"timeout":  {Type: "string", Description: "per metadata command deadline, a Go duration (default 15s)"},
 	"no-probe": {Type: "boolean", Description: "files only; do not run harness metadata commands"},
 	"fresh":    {Type: "boolean", Description: "collect now even if the inventory cache is young"},
-	"ttl":      {Type: "string", Description: "how old a cached inventory may be, a Go duration (default 30s; 0s collects)"},
+	"ttl":      {Type: "string", Description: "how old a cached inventory may be, a Go duration (default 5m; 0s collects)"},
 }
 
 var filterParams = map[string]ochazuke.Parameter{
@@ -137,27 +137,13 @@ func (t *Tool) shell() *ocli.Shell {
 		if err != nil {
 			return nil, err
 		}
-		in := t.inventory(o, specs[noun].need)
-		rows := []Row{}
-		items := []ochazuke.ListItem{}
-		add := func(id, label string, value any) {
-			if err == nil {
-				value, err = lean(noun, value)
-			}
-			rows = append(rows, Row{ID: noun + "/" + id, Label: label, Data: value})
-			items = append(items, ochazuke.ListItem{ID: noun + "/" + id, Label: label, Noun: noun, Data: id})
-		}
-		if noun == "status" {
-			for _, c := range statusCounts(in) {
-				add(c.Kind, fmt.Sprintf("%s: %d", c.Kind, c.Count), c)
-			}
-		} else {
-			for _, e := range filterModel(in.Entries(noun, o), model) {
-				add(e.ID, label(noun, e), e.Value)
-			}
-		}
+		rows, err := nounRows(noun, t.inventory(o, specs[noun].need), o, model, true)
 		if err != nil {
 			return nil, err
+		}
+		items := make([]ochazuke.ListItem, len(rows))
+		for i, row := range rows {
+			items[i] = ochazuke.ListItem{ID: row.ID, Label: row.Label, Noun: noun, Data: strings.TrimPrefix(row.ID, noun+"/")}
 		}
 		return rows, lists[noun].SetItems(items)
 	}
@@ -186,6 +172,10 @@ func (t *Tool) shell() *ocli.Shell {
 			}
 			return ochazuke.Done(t.inventory(o, specs["status"].need))
 		}, "the whole inventory, warnings included")
+	r.Define("status").
+		Verb("state", func(c ochazuke.Ctx) ochazuke.Result { return result(t.state(c.Args)) },
+			"every list's rows in one collection: {NOUN: [{id, label}]} for "+strings.Join(nouns, ", ")+" (the catalog's state)").State()
+	r.Operations["status.state"] = withParams(r.Operations["status.state"], merged(collectParams, filterParams))
 	r.Operations["status.list"] = withParams(r.Operations["status.list"], collectParams)
 	r.Operations["status.show"] = withParams(r.Operations["status.show"], collectParams)
 
@@ -202,6 +192,55 @@ func (t *Tool) shell() *ocli.Shell {
 		return lists[noun].SetItems([]ochazuke.ListItem{{ID: target, Label: id, Noun: noun, Data: id}})
 	}
 	return sh
+}
+
+// nounRows is one noun's rows from an inventory: the status counts, else
+// the noun's entries after the model filter. withData keeps each record
+// (lean); without it a row is its id and label, what a host's list needs.
+func nounRows(noun string, in Inventory, o Options, model string, withData bool) ([]Row, error) {
+	rows := []Row{}
+	var err error
+	add := func(id, label string, value any) {
+		row := Row{ID: noun + "/" + id, Label: label}
+		if withData && err == nil {
+			row.Data, err = lean(noun, value)
+		}
+		rows = append(rows, row)
+	}
+	if noun == "status" {
+		for _, c := range statusCounts(in) {
+			add(c.Kind, fmt.Sprintf("%s: %d", c.Kind, c.Count), c)
+		}
+	} else {
+		for _, e := range filterModel(in.Entries(noun, o), model) {
+			add(e.ID, label(noun, e), e.Value)
+		}
+	}
+	return rows, err
+}
+
+// state is the catalog's state source: one collection covering every
+// noun's need, processes inspected once, and every list's rows by noun.
+func (t *Tool) state(args ochazuke.Arguments) (map[string][]Row, error) {
+	o, model, err := t.options(args)
+	if err != nil {
+		return nil, err
+	}
+	var need Need
+	for _, noun := range nouns {
+		n := specs[noun].need
+		need.Processes = need.Processes || n.Processes
+		need.Catalogs = need.Catalogs || n.Catalogs
+		need.RuntimeAgents = need.RuntimeAgents || n.RuntimeAgents
+	}
+	in := t.inventory(o, need)
+	out := make(map[string][]Row, len(nouns))
+	for _, noun := range nouns {
+		if out[noun], err = nounRows(noun, in, o, model, false); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 func withParams(op ochazuke.Operation, p map[string]ochazuke.Parameter) ochazuke.Operation {

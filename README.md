@@ -28,7 +28,7 @@ The nouns are an ochazuke runtime behind `ochazuke/cli`: `o-ai NOUN VERB [ENTRY]
 | `skill` | list, show | `Resource` (path, resolvedPath, frontmatter; content in show) |
 | `agent` | list, show | `Resource` |
 | `settings` | list, show | `Setting` |
-| `status` | list, show | list: counts per kind; show: the whole inventory |
+| `status` | list, show, state | list: counts per kind; show: the whole inventory; state: every list at once (below) |
 
 ```sh
 o ai harness list
@@ -41,6 +41,7 @@ o ai skill list --search review
 o ai skill show --target skill/skill:claude:/Users/me/.claude/skills/review/SKILL.md
 o ai skills                           # a plural is NOUN list
 o ai status show                      # the full inventory, warnings included
+o ai status state                     # every noun's rows from one collection (the catalog's state)
 o ai                                  # status list
 o-ai catalog                          # the nouns and verbs, for a host
 ```
@@ -73,7 +74,7 @@ Words: a noun is resolved by unique prefix (`mo` is model, `sk` is skill; `s` is
 | `--timeout 15s` | Per-metadata-command deadline |
 | `--no-probe` | Skip native harness commands; inspect files and caches only |
 | `--fresh` | Collect now, even if the inventory cache is young |
-| `--ttl 30s` | How old a cached inventory may be (`0s` always collects) |
+| `--ttl 5m` | How old a cached inventory may be (`0s` always collects) |
 | `--json '{...}'` | The parameters as one JSON object (`--json '{"harness":"omp"}'`) |
 | `--target ROW_ID` | The row a show or select acts on (an `id` from the list) |
 
@@ -81,7 +82,7 @@ Parameters come after NOUN VERB. Collection warnings go to stderr.
 
 ### The inventory cache
 
-A collection is cached in `$XDG_CACHE_HOME/o-ai/inventory.json` (else `~/.cache/o-ai/inventory.json`), mode `0600`, so a host that lists every noun (nabe, at mount and refresh) collects once. An entry is keyed by what changes the inventory: `--home`, `--project`, `--timeout`, `--no-probe` and the harness environment (`PATH`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, ...); the filters apply after collection and share it. It serves a verb while younger than `--ttl` (30 s) and when it holds what the noun needs: skill and settings read files only, agent adds the runtime agents (Claude initialization, OMP's exporter), provider, model and thinking add the native catalogs, harness and status everything. Process status is never cached; harness and status inspect processes on every call. The file is replaced atomically under `inventory.json.lock`, so concurrent callers wait for one collection; a missing or corrupt file means collecting, never an error.
+A collection is cached in `$XDG_CACHE_HOME/o-ai/inventory.json` (else `~/.cache/o-ai/inventory.json`), mode `0600`, so a host that lists every noun (nabe, at mount and refresh) collects once. An entry is keyed by what changes the inventory: `--home`, `--project`, `--timeout`, `--no-probe` and the harness environment (`PATH`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, ...); the filters apply after collection and share it. It serves a verb while younger than `--ttl` (5 min; a host asks for a newer one with `--fresh`) and when it holds what the noun needs: skill and settings read files only, agent adds the runtime agents (Claude initialization, OMP's exporter), provider, model and thinking add the native catalogs, harness and status everything. Process status is never cached; harness and status inspect processes on every call. The file is replaced atomically under `inventory.json.lock`, so concurrent callers wait for one collection; a missing or corrupt file means collecting, never an error.
 
 A model's stable inventory ID includes its harness and provider, such as `omp:openai-codex/gpt-6-sol`. Its `cliSlug` is the actual harness argument. Native metadata is preserved in `metadata`, including context limits, pricing, modalities, capabilities, resolved aliases, and reasoning descriptions when supplied by the source. Model details include argument arrays rather than shell-interpolated command strings. Claude uses `--effort`, Codex uses `-c 'model_reasoning_effort="..."'`, and OpenCode uses `--variant`. Thinking entries include the complete `launchArgs` array. Non-chat OMP catalog entries have empty launch arrays.
 
@@ -108,6 +109,18 @@ o tui                                               # a page ai with one list pe
 ```
 
 Restart nabe after `o-nabe extension refresh o-ai`. A row's verbs run as `o-ai NOUN VERB --target ROW_ID --json '{}' --yes`.
+
+`status state` is the catalog's state source (`"state": "status.state"`, the ochazuke/cli convention): one process, one collection covering every noun's need, processes inspected once, answering every list:
+
+```js
+state = {
+  harness: [{ id: "harness/claude", label: "Claude Code" }, /* ... */],
+  skill:   [{ id: "skill/skill:claude:/Users/me/.claude/skills/review/SKILL.md", label: "review [claude]" }, /* 1,800 more */],
+  /* provider, model, thinking, agent, settings, status */
+}
+```
+
+Rows carry only id and label (no `data`): a host's list needs nothing else, and `show --target ID` prints the record. nabe runs it once at startup, then on its refresh interval, after a verb of the extension and on `extension refresh` (with `--fresh`), instead of eight `NOUN list` processes.
 
 ## Next
 

@@ -26,8 +26,9 @@ import (
 // cached but inspected per call. Writers hold inventory.json.lock, so
 // concurrent callers wait for one collection instead of each running it.
 
-// defaultTTL is how old a cached inventory may be without --ttl.
-const defaultTTL = 30 * time.Second
+// defaultTTL is how old a cached inventory may be without --ttl. A host
+// that wants a newer one asks with --fresh (nabe's explicit refresh).
+const defaultTTL = 5 * time.Minute
 
 const cacheSchema = 1
 

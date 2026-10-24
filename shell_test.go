@@ -27,6 +27,9 @@ func TestCatalogDeclaresRowsForEveryNoun(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &doc); err != nil {
 		t.Fatal(err)
 	}
+	if !strings.Contains(out, `"state": "status.state"`) {
+		t.Errorf("catalog names no state source:\n%.300s", out)
+	}
 	if doc.Schema != 1 || doc.Name != "o-ai" {
 		t.Fatalf("schema %d name %q", doc.Schema, doc.Name)
 	}

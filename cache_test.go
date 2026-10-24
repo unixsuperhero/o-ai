@@ -68,12 +68,12 @@ func TestCacheServesWithinTTLAndFreshRecollects(t *testing.T) {
 	if len(w.needs) != 2 {
 		t.Fatalf("--fresh: %d collections", len(w.needs))
 	}
-	w.now = w.now.Add(29 * time.Second)
+	w.now = w.now.Add(defaultTTL - time.Second)
 	w.run("skill", "list")
 	w.now = w.now.Add(2 * time.Second)
 	w.run("skill", "list")
 	if len(w.needs) != 3 {
-		t.Fatalf("an entry older than 30s must be recollected: %d collections", len(w.needs))
+		t.Fatalf("an entry older than the 5m TTL must be recollected: %d collections", len(w.needs))
 	}
 	w.now = w.now.Add(time.Minute)
 	w.run("skill", "list", "--ttl", "2m")
@@ -129,5 +129,31 @@ func TestCorruptCacheRecollects(t *testing.T) {
 	w.run("skill", "list")
 	if len(w.needs) != 2 {
 		t.Fatalf("a cache whose entries do not decode must be recollected: %d collections", len(w.needs))
+	}
+}
+
+// The state verb answers every list in one collection: one inventory that
+// covers every noun's need, rows by noun with ids and labels only.
+func TestStateAnswersEveryListInOneCollection(t *testing.T) {
+	w := newCacheWorld(t)
+	var state map[string][]map[string]any
+	if err := json.Unmarshal([]byte(w.run("status", "state")), &state); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.needs) != 1 || w.needs[0] != needAll {
+		t.Fatalf("collections %+v, want one of everything", w.needs)
+	}
+	for _, noun := range nouns {
+		if _, ok := state[noun]; !ok {
+			t.Errorf("state lacks %s", noun)
+		}
+	}
+	if rows := state["skill"]; len(rows) != 1 || rows[0]["id"] != "skill/skill:claude:/s/SKILL.md" || rows[0]["label"] != "s [claude]" || rows[0]["data"] != nil {
+		t.Fatalf("skill rows %+v", rows)
+	}
+	w.run("skill", "list") // covered by the state's collection
+	w.run("status", "state", "--fresh")
+	if len(w.needs) != 2 {
+		t.Fatalf("list after state, then state --fresh: %d collections", len(w.needs))
 	}
 }
