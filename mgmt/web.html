@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="mgmt-token" content="__MGMT_TOKEN__" />
+    <title>Review desk · mgmt</title>
+    <link rel="stylesheet" href="/web.css" />
+    <script src="/web.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Review desk home"
+        ><span class="brand-mark">m.</span
+        ><span>review desk<small>LOCAL WORKSPACE</small></span></a
+      >
+      <span class="safety">Decide here. Apply with your assistant.</span>
+      <button id="handoff" class="primary" disabled>
+        Copy handoff <span aria-hidden="true">↗</span>
+      </button>
+    </header>
+    <div class="workspace">
+      <aside class="sidebar" aria-label="Review sessions">
+        <div class="section-label">
+          YOUR SESSIONS
+          <button
+            id="refresh"
+            class="icon-button"
+            title="Refresh sessions"
+            aria-label="Refresh sessions"
+          >
+            ↻
+          </button>
+        </div>
+        <p class="sidebar-intro">A little less.<br />A little clearer.</p>
+        <nav id="sessions" aria-label="Choose a session"></nav>
+        <div id="session-errors" role="status"></div>
+        <div class="sidebar-footer">
+          <span class="local-dot"></span> Local files. No cloud.
+          <p>Changes save as you go.<br />Nothing is deleted here.</p>
+        </div>
+      </aside>
+      <main>
+        <section class="session-header">
+          <div>
+            <div class="eyebrow">THE REVIEW</div>
+            <h1 id="session-title">Your review, at your pace.</h1>
+            <p id="session-summary">
+              Choose any session to begin. There is no required order.
+            </p>
+          </div>
+          <div
+            id="progress"
+            class="progress"
+            aria-label="Selected decisions"
+          ></div>
+        </section>
+        <details id="scope-panel">
+          <summary>Session location & scope</summary>
+          <p id="session-path"></p>
+          <p id="scope"></p>
+        </details>
+        <div class="review-grid">
+          <section class="item-pane" aria-label="Review items">
+            <div class="list-tools">
+              <label class="search-label" for="search">Find an item</label
+              ><input
+                id="search"
+                type="search"
+                placeholder="Search titles, text, notes…"
+                autocomplete="off"
+              />
+              <div class="filter-row">
+                <label for="filter">Show</label
+                ><select id="filter">
+                  <option value="all">All items</option>
+                  <option value="selected">With decisions</option>
+                  <option value="unselected">Undecided</option>
+                  <option value="locked">Locked</option></select
+                ><span id="visible-count"></span>
+              </div>
+            </div>
+            <div id="items" class="item-list"></div>
+          </section>
+          <section id="detail" class="detail-pane" aria-label="Selected item">
+            <div id="empty-detail" class="empty">
+              <span class="empty-mark">↖</span>
+              <h2>Make room for what matters.</h2>
+              <p>
+                Select an item to read its source, choose an action, or leave a
+                thought for later.
+              </p>
+            </div>
+            <article id="editor" hidden>
+              <div class="item-heading">
+                <span id="item-number" class="eyebrow"></span
+                ><span id="item-status" class="status-pill"></span>
+              </div>
+              <h2 id="item-title"></h2>
+              <p id="item-source" class="source-location"></p>
+              <details class="source-panel" open>
+                <summary>Source material <span>read only</span></summary>
+                <pre id="item-details"></pre>
+              </details>
+              <div id="result" class="result" hidden></div>
+              <fieldset id="decision-fields">
+                <legend>What should happen?</legend>
+                <p class="field-help">
+                  Choose freely. Clear leaves this item untouched.
+                </p>
+                <div class="actions" role="group" aria-label="Choose an action">
+                  <button type="button" data-action="remove" class="remove">
+                    Remove</button
+                  ><button type="button" data-action="keep">Keep</button
+                  ><button type="button" data-action="revise">Revise</button
+                  ><button type="button" data-action="" class="clear">
+                    Clear
+                  </button>
+                </div>
+                <label class="custom-label" for="custom-action"
+                  >Or name your own action</label
+                ><input
+                  id="custom-action"
+                  type="text"
+                  placeholder="e.g. merge, archive, shorten"
+                  autocomplete="off"
+                />
+                <div class="note-heading">
+                  <label for="note">Notes & instructions</label
+                  ><span>OPTIONAL</span>
+                </div>
+                <textarea
+                  id="note"
+                  rows="5"
+                  placeholder="A reminder for yourself, what to preserve, or instructions for your agent…"
+                ></textarea>
+                <p class="field-help">
+                  A note alone does not select an action. To request changes,
+                  choose an action above.
+                </p>
+              </fieldset>
+              <div class="save-row">
+                <span id="save-state" role="status" aria-live="polite"
+                  >Saved</span
+                ><button id="retry" hidden>Retry save</button
+                ><button id="reload" hidden>Reload saved version</button>
+              </div>
+            </article>
+          </section>
+        </div>
+      </main>
+    </div>
+    <div id="notice" role="status" aria-live="polite" hidden></div>
+    <dialog id="handoff-dialog">
+      <h2>Ready when you are.</h2>
+      <p>
+        Copy this request to your assistant. It authorizes the selected actions;
+        opening this dialog does not execute them.
+      </p>
+      <textarea
+        id="handoff-text"
+        rows="7"
+        readonly
+        aria-label="Assistant handoff request"
+      ></textarea>
+      <div class="dialog-actions">
+        <button id="close-handoff">Close</button
+        ><button id="copy-handoff" class="primary">Copy request</button>
+      </div>
+    </dialog>
+  </body>
+</html>
