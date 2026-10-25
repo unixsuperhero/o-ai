@@ -7,6 +7,35 @@ import (
 	"testing"
 )
 
+func TestContextualHelpDoesNotCollect(t *testing.T) {
+	for _, args := range [][]string{
+		{"model"}, {"model", "--help"}, {"mo", "--help"},
+		{"provider"}, {"provider", "--help"}, {"model", "list", "--help"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var out, errOut strings.Builder
+			tool := &Tool{
+				Stdout: &out, Stderr: &errOut, Prog: "o-ai",
+				collect: func(Options, Need) Inventory {
+					t.Fatal("help must not collect inventory")
+					return Inventory{}
+				},
+			}
+			if err := tool.Main(t.Context(), args); err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range []string{"o-ai", "list", "CLI execution:"} {
+				if !strings.Contains(out.String(), want) {
+					t.Errorf("help missing %q:\n%s", want, out.String())
+				}
+			}
+			if errOut.Len() != 0 {
+				t.Errorf("help wrote stderr: %s", errOut.String())
+			}
+		})
+	}
+}
+
 func TestCatalogDeclaresRowsForEveryNoun(t *testing.T) {
 	out, _, err := runCLI(t, "catalog")
 	if err != nil {

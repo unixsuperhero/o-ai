@@ -80,7 +80,10 @@ func progName(getenv func(string) string) string {
 func (t *Tool) Main(ctx context.Context, args []string) error {
 	app := oden.New("o-ai", args, oden.WithBuiltins(), oden.WithStdio(t.Stdin, t.Stdout, t.Stderr), oden.WithEnv(t.Env))
 	sh := t.shell()
-	mount(app, sh)
+	ocli.Mount(app, sh)
+	model := app.Catalog().Lookup("model").Command
+	model.Aliases = append(model.Aliases, "mo")
+	app.Add()
 	app.Default = func(ctx context.Context, args []string) error {
 		if len(args) == 0 {
 			return sh.Run(ctx, []string{"status", "list"})
@@ -95,32 +98,6 @@ func (t *Tool) Main(ctx context.Context, args []string) error {
 		return fmt.Errorf("unknown command %q (%s help lists them; nouns: %s)", args[0], t.Prog, strings.Join(nouns, ", "))
 	}
 	return app.Run(ctx)
-}
-
-// mount is ocli.Mount for this tool's own nouns only: each noun an inline
-// command running the shell, plus catalog. The framework's nouns (mode,
-// modal, palette, ...) stay out of the command words, so model's unique
-// prefix is still mo; they remain in the catalog, where a host skips them.
-func mount(app *oden.App, sh *ocli.Shell) {
-	for _, noun := range nouns {
-		var verbs []string
-		for _, op := range sh.Runtime.Catalog() {
-			if op.Noun == noun {
-				verbs = append(verbs, op.Verb)
-			}
-		}
-		app.Add(oden.Command{Name: noun, Summary: strings.Join(verbs, " "), Source: "noun", Run: func(ctx context.Context, rest []string) error {
-			return sh.Run(ctx, append([]string{noun}, rest...))
-		}})
-	}
-	app.Add(oden.Command{Name: "catalog", Summary: "print the nouns, verbs, bindings and pages as JSON", Source: "cli", Run: func(context.Context, []string) error {
-		data, err := ocli.Catalog(sh.Runtime, sh.Bin, sh.Version)
-		if err != nil {
-			return err
-		}
-		_, err = fmt.Fprintf(sh.Stdout, "%s\n", data)
-		return err
-	}})
 }
 
 // plural is the noun a plural word names (skills, harnesses), else "".

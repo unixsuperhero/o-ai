@@ -13,7 +13,7 @@ The AI hub's data tool (`o-ai`, so `o ai` and `mtm ai`). An oden app with an och
 
 | Concern | File |
 |---|---|
-| `Tool`, `main`, the oden app, `mount` (this tool's nouns as commands, plus `catalog`), plurals and the bare default, model selection file | `main.go` |
+| `Tool`, `main`, the oden app, shared `ocli.Mount` groups and catalog, the explicit `mo` alias, plurals and the bare default, model selection file | `main.go` |
 | The runtime: nouns and verbs, `specs` (each noun's lean-row fields and collection `Need`), parameters, rows, `Reveal`, `show`/`select`, option parsing, the per-process collection cache | `shell.go` |
 | The inventory cache file (`~/.cache/o-ai/inventory.json`): key, TTL, lock, atomic write | `cache.go` |
 | Inventory types, `Entries` (the projection every list reads), `categories` | `inventory.go` |
