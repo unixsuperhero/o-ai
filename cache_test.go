@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,6 +20,9 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	os.Setenv("XDG_CACHE_HOME", dir)
+	// Quota never reads the user's keychain or the network in a test.
+	defaultKeychain = func(context.Context, string) ([]byte, error) { return nil, errors.New("no keychain in tests") }
+	quotaTransport = roundTripFunc(func(*http.Request) (*http.Response, error) { return nil, errors.New("no network in tests") })
 	code := m.Run()
 	os.RemoveAll(dir)
 	os.Exit(code)

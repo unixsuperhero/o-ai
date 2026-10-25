@@ -45,6 +45,7 @@ type Tool struct {
 	cache   map[string]cacheEntry         // this process's collections, by cache key
 	collect func(Options, Need) Inventory // CollectNeed unless a test counts collections
 	now     func() time.Time              // time.Now unless a test sets the clock
+	quota   quotaDeps                     // quota's transport, keychain and endpoints (quota.go)
 }
 
 func main() {

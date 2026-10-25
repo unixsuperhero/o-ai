@@ -21,8 +21,8 @@ import (
 // record alone. A --target no list shows yet is revealed as a bare row of
 // its noun; show then finds the id in its own collection.
 
-// nouns are the runtime's nouns: the inventory kinds, then status.
-var nouns = append(append([]string{}, categories...), "status")
+// nouns are the runtime's nouns: the inventory kinds, status, then quota.
+var nouns = append(append([]string{}, categories...), "status", "quota")
 
 // nounSpec is what a noun's verbs read: the bulky fields a list row's data
 // leaves out (multi-KB at the long tail; show still prints the whole
@@ -30,6 +30,7 @@ var nouns = append(append([]string{}, categories...), "status")
 type nounSpec struct {
 	omit []string
 	need Need
+	live bool // fetched on every call, outside the inventory (quota.go); not in the state
 }
 
 var catalogs = Need{Catalogs: true}
@@ -45,6 +46,7 @@ var specs = map[string]nounSpec{
 	"agent":    {omit: []string{"content"}, need: Need{RuntimeAgents: true}},
 	"settings": {},
 	"status":   {need: needAll},
+	"quota":    {live: true},
 }
 
 // lean is a record as a list row carries it: its JSON without the noun's
@@ -192,10 +194,11 @@ func (t *Tool) shell() *ocli.Shell {
 		}, "the whole inventory, warnings included")
 	r.Define("status").
 		Verb("state", func(c ochazuke.Ctx) ochazuke.Result { return result(t.state(c.Args)) },
-			"every list's rows in one collection: {NOUN: [{id, label}]} for "+strings.Join(nouns, ", ")+" (the catalog's state)").State()
+			"every list's rows in one collection: {NOUN: [{id, label}]} for "+strings.Join(stateNouns(), ", ")+" (the catalog's state)").State()
 	r.Operations["status.state"] = withParams(r.Operations["status.state"], merged(collectParams, filterParams))
 	r.Operations["status.list"] = withParams(r.Operations["status.list"], merged(collectParams, formatParam))
 	r.Operations["status.show"] = withParams(r.Operations["status.show"], collectParams)
+	t.defineQuota(r, lists["quota"])
 
 	sh := ocli.New(r, "o-ai", t.Stdin, t.Stdout, t.Stderr)
 	sh.Usage = ocli.DefaultUsage(t.Prog)
@@ -247,7 +250,7 @@ func (t *Tool) state(args ochazuke.Arguments) (ocli.Lines, error) {
 		return nil, err
 	}
 	var need Need
-	for _, noun := range nouns {
+	for _, noun := range stateNouns() {
 		n := specs[noun].need
 		need.Processes = need.Processes || n.Processes
 		need.Catalogs = need.Catalogs || n.Catalogs
@@ -255,7 +258,7 @@ func (t *Tool) state(args ochazuke.Arguments) (ocli.Lines, error) {
 	}
 	in := t.inventory(o, need)
 	var out ocli.Lines
-	for _, noun := range nouns {
+	for _, noun := range stateNouns() {
 		rows, err := nounRows(noun, in, o, model, false)
 		if err != nil {
 			return nil, err
@@ -263,6 +266,17 @@ func (t *Tool) state(args ochazuke.Arguments) (ocli.Lines, error) {
 		out = append(out, lines(noun, rows)...)
 	}
 	return out, nil
+}
+
+// stateNouns are the nouns the state answers: every noun but the live ones.
+func stateNouns() []string {
+	var out []string
+	for _, noun := range nouns {
+		if !specs[noun].live {
+			out = append(out, noun)
+		}
+	}
+	return out
 }
 
 // lines is rows as JSON Lines tagged with their noun.
