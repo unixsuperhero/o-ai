@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/unixsuperhero/oden"
 )
 
 func TestUniqueCommandPrefixes(t *testing.T) {
@@ -259,5 +261,17 @@ func TestCustomProviderPreservesNamespacedModelSlug(t *testing.T) {
 	model := c.inventory.Models[0]
 	if model.Provider != "gateway" || model.Slug != "vendor/model" || !reflect.DeepEqual(model.Args, []string{"codex", "--model", "vendor/model", "-c", `model_provider="gateway"`}) {
 		t.Fatalf("namespaced model changed provider: %+v", model)
+	}
+}
+
+func TestUnknownWordIsNotFoundAndPluralsStillList(t *testing.T) {
+	home := isolatedHome(t)
+	flags := []string{"--home", home, "--project", home, "--no-probe"}
+	out, errOut, err := runCLI(t, append([]string{"skils"}, flags...)...)
+	if oden.ExitCode(err) != 1 || out != "" || !strings.HasPrefix(errOut, "o-ai: command \"skils\" not found\ndid you mean: skill\n") {
+		t.Fatalf("skils: %v %q\n%s", err, out, errOut)
+	}
+	if _, errOut, err := runCLI(t, append([]string{"skills"}, flags...)...); err != nil {
+		t.Fatalf("skills: %v\n%s", err, errOut)
 	}
 }

@@ -76,7 +76,8 @@ func progName(getenv func(string) string) string {
 
 // Main runs one command: a noun of the runtime (oden resolves a unique
 // prefix, the shell a verb's), catalog, an oden builtin, or by default a
-// plural noun (skills is skill list) and, with no words, status list.
+// plural noun (skills is skill list) and, with no words, status list; any
+// other word is oden's not found report.
 func (t *Tool) Main(ctx context.Context, args []string) error {
 	app := oden.New("o-ai", args, oden.WithBuiltins(), oden.WithStdio(t.Stdin, t.Stdout, t.Stderr), oden.WithEnv(t.Env))
 	sh := t.shell()
@@ -95,7 +96,7 @@ func (t *Tool) Main(ctx context.Context, args []string) error {
 			}
 			return sh.Run(ctx, append([]string{noun}, rest...))
 		}
-		return fmt.Errorf("unknown command %q (%s help lists them; nouns: %s)", args[0], t.Prog, strings.Join(nouns, ", "))
+		return oden.ErrNotFound
 	}
 	return app.Run(ctx)
 }
