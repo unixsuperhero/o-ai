@@ -2,12 +2,16 @@
 
 The AI hub's data tool (`o-ai`, so `o ai` and `mtm ai`). An oden app with an ochazuke runtime (`github.com/unixsuperhero/ochazuke`) behind `ochazuke/cli`: one noun per inventory kind (harness, provider, model, thinking, skill, agent, settings) plus status, every verb printing JSON. It was aiview (hub/ai/utils/aiview; its history is in this repository's log). It has no TUI: nabe (`o tui`) mounts its catalog as the page `ai`.
 
+## Plans and todos
+
+Family plans, todos and the roadmap live in `~/hub/o-plans/` (`README.md` is the index). Read it before planning work; add or update items there. Do not add a TODO.md or docs/plans/ to this repo.
+
 ## Read in this order
 
 1. This file, then `README.md` for the commands, the row shape and the aiview spellings.
 2. `../ochazuke/AGENTS.md`, section "Building an application on ochazuke", and `../ochazuke/cli/{shell.go,mount.go,catalog.go}`.
 3. `../nabe/README.md`: what a host reads (application nouns, a list verb with `rows`, rows `{id, label, data}`).
-4. `../matomeru/docs/plans/cli-extensions.md`, section 6 (`mtm-ai`): the nouns still to come (mcp, mcp-tool).
+4. `~/hub/o-plans/plans/cli-extensions.md`, section 6 (`mtm-ai`): the nouns still to come (mcp, mcp-tool).
 
 ## Where does X live
 
