@@ -1,7 +1,8 @@
 // Command o-ai is the AI hub's data tool: the local AI harnesses (omp,
 // claude, codex, pi, opencode, gemini, clawed) and their providers, models,
 // thinking levels, skills, agents and settings, inspected without making a
-// model request. It was aiview; it is now a family tool (o-<tool>), so
+// model request, and the plan quota Claude Code and Codex have used and
+// have left (quota, a read-only request to each vendor's usage endpoint). It was aiview; it is now a family tool (o-<tool>), so
 // o ai ARGS runs it, and so does mtm ai ARGS (mtm finds o-<sub> after its
 // own mtm-<sub>).
 //
@@ -9,11 +10,13 @@
 //	o-ai NOUN show ENTRY|--target ID
 //	o-ai model select ENTRY
 //	o-ai status show                 the whole inventory
+//	o-ai quota list [claude|codex]   rate-limit windows: % used, % left, resets
+//	o-ai quota show [claude|codex]   a harness's quota record
 //	o-ai NOUNs                       NOUN list (o-ai skills, o-ai models)
 //	o-ai catalog                     the nouns and verbs, for a host (nabe)
 //
-// NOUN is harness, provider, model, thinking, skill, agent, settings or
-// status: an ochazuke runtime behind ochazuke/cli (shell.go), every verb
+// NOUN is harness, provider, model, thinking, skill, agent, settings,
+// status or quota: an ochazuke runtime behind ochazuke/cli (shell.go), every verb
 // printing JSON. There is no TUI here: o tui (nabe) renders the rows after
 // o-nabe extension register o-ai.
 package main

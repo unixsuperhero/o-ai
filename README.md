@@ -29,6 +29,7 @@ The nouns are an ochazuke runtime behind `ochazuke/cli`: `o-ai NOUN VERB [ENTRY]
 | `agent` | list, show | `Resource` |
 | `settings` | list, show | `Setting` |
 | `status` | list, show, state | list: counts per kind; show: the whole inventory; state: every list at once (below) |
+| `quota` | list, show | a rate-limit window: `usedPercent`, `remainingPercent`, `resetsAt` (below) |
 
 ```sh
 o ai harness list
@@ -46,6 +47,29 @@ o ai skill list --format jsonl        # one {noun, id, label, data} per line
 o ai                                  # status list
 o-ai catalog                          # the nouns and verbs, for a host
 ```
+
+### Quota
+
+`quota` is how much of the plan's rate-limit windows Claude Code and Codex have used and have left, fetched on every call (never cached, not in `status state`):
+
+```sh
+o ai quota list                # one row per window, claude then codex
+o ai quota list codex          # one harness (--harness codex)
+o ai quota show claude         # the whole record: plan, source, observedAt, windows, error
+o ai quota show                # both records
+```
+
+```js
+row = {
+  id: "quota/claude:weekly_all",                // quota/HARNESS:WINDOW; a scoped window adds its model (quota/claude:weekly_scoped:fable)
+  label: "claude weekly_all 47% used, 53% left, resets 2026-10-28 08:00",   // the reset in local time
+  data: { harness: "claude", window: "weekly_all", usedPercent: 47, remainingPercent: 53,
+          resetsAt: "2026-10-28T08:00:00Z", resetsIn: "63h7m0s", severity: "normal",
+          source: "api", observedAt: "2026-10-25T16:52:06Z" },
+}
+```
+
+Claude's windows are the usage answer's `limits` (`session`, `weekly_all`, `weekly_scoped (MODEL)`), else `five_hour` and `seven_day`. Codex's are `primary (5h)` and `secondary (7d)`, named by their length. `source` is `api` (the usage endpoint) or `session` (Codex's newest session file, observed at the file's modification time; a window that has reset since is `stale`, and its label says so). A harness that cannot answer (no login, an API-key Codex login, an expired Claude token, a network error) is one row `quota/HARNESS:error` whose label says why, and `show` prints it as `error`. `quota list` fails only when no harness answered. `--timeout` is the request's deadline (15s).
 
 A list is rows:
 
@@ -72,7 +96,7 @@ Words: a noun is resolved by unique prefix (`mo` is model, `sk` is skill; `s` is
 | `--search TEXT` | Case-insensitive name, ID, and description search |
 | `--project DIRECTORY` | Inspect a project other than the current directory |
 | `--home DIRECTORY` | Use another home for file discovery and child processes |
-| `--timeout 15s` | Per-metadata-command deadline |
+| `--timeout 15s` | Per-metadata-command deadline; quota's usage request deadline |
 | `--no-probe` | Skip native harness commands; inspect files and caches only |
 | `--fresh` | Collect now, even if the inventory cache is young |
 | `--ttl 5m` | How old a cached inventory may be (`0s` always collects) |
@@ -142,6 +166,15 @@ sources = { skills: [{ name: "ai-tools", path: "~/proj/ai-tools/catalog/skills" 
 | Gemini | Configured model only, no inferred capability catalog | User/project settings and discovered resource files |
 | `clawed` | Probed only if an executable with that name exists; expects Claude-compatible initialization | Its own configuration directory |
 
+### Quota
+
+`quota` makes a read-only HTTPS `GET` to each vendor's usage endpoint with the harness's own login, never an inference request, and never refreshes or writes a login:
+
+| Harness | Login | Endpoint | Fallback |
+| --- | --- | --- | --- |
+| Claude Code | macOS keychain item `Claude Code-credentials` (when `--home` is your own), else `$CLAUDE_CONFIG_DIR/.credentials.json` (`~/.claude`); an expired token is an error telling you to run `claude` | `https://api.anthropic.com/api/oauth/usage` (`anthropic-beta: oauth-2025-04-20`) | `five_hour`/`seven_day` when the answer has no `limits` |
+| Codex | `$CODEX_HOME/auth.json` (`~/.codex`) with `auth_mode: chatgpt`; the account id from `tokens.account_id`, else the access token's claim. An API-key login has no plan quota and says so | `https://chatgpt.com/backend-api/codex/usage` (`ChatGPT-Account-Id`) | the last `token_count` event with `rate_limits` in the newest `$CODEX_HOME/sessions/YYYY/MM/DD/*.jsonl` |
+
 The tool distinguishes installed executables, configuration presence, running processes, catalog membership, configured credentials where reported, and disabled providers. Catalog membership is not proof of authentication, subscription entitlement, network health, or successful inference. Pi can report configured credentials without validating them; other adapters do not claim authentication success.
 
 Process discovery matches executable paths and Node/Bun/Deno script entrypoints. Counts include background helpers, not just interactive sessions. Unrecognized wrappers can remain unobserved. Only matching PIDs are retained, never process arguments.
@@ -154,7 +187,7 @@ Settings retain file provenance and scope rather than claiming to reproduce ever
 
 ## Safety
 
-o-ai does not edit harness settings or launch an inference request. Native metadata commands can update their own caches and load trusted harness configuration. OMP bundled agents are exported into an owned temporary directory, read, then removed. Use `--no-probe` when only file inspection is wanted.
+o-ai does not edit harness settings or launch an inference request; `quota` reads the vendors' usage endpoints only. Native metadata commands can update their own caches and load trusted harness configuration. OMP bundled agents are exported into an owned temporary directory, read, then removed. Use `--no-probe` when only file inspection is wanted.
 
 Settings and metadata redact secret-bearing fields, credential/header/environment containers, command hooks, recognized token formats, and URL credentials/query strings. Resource bodies remain inspectable with recognized token formats redacted. This is not a guarantee that arbitrary prose cannot contain a secret; do not publish a full inventory without reviewing it.
 
