@@ -26,11 +26,14 @@ var nouns = append(append([]string{}, categories...), "status", "quota")
 
 // nounSpec is what a noun's verbs read: the bulky fields a list row's data
 // leaves out (multi-KB at the long tail; show still prints the whole
-// record) and the costly parts of a collection they need.
+// record), the fields a state row's data keeps (what a host draws a row's
+// details from without a show), and the costly parts of a collection they
+// need.
 type nounSpec struct {
-	omit []string
-	need Need
-	live bool // fetched on every call, outside the inventory (quota.go); not in the state
+	omit  []string
+	brief []string // a state row's data: these keys of the record; none keeps the lean record
+	need  Need
+	live  bool // fetched on every call, outside the inventory (quota.go); not in the state
 }
 
 var catalogs = Need{Catalogs: true}
@@ -38,15 +41,55 @@ var catalogs = Need{Catalogs: true}
 // specs are the nouns' needs. Resource and settings lists read files only;
 // harness and status read everything, processes included.
 var specs = map[string]nounSpec{
-	"harness":  {omit: []string{"settings"}, need: needAll},
-	"provider": {omit: []string{"models"}, need: catalogs},
-	"model":    {omit: []string{"metadata"}, need: catalogs},
-	"thinking": {need: catalogs},
-	"skill":    {omit: []string{"content"}},
-	"agent":    {omit: []string{"content"}, need: Need{RuntimeAgents: true}},
-	"settings": {},
+	"harness":  {omit: []string{"settings"}, brief: []string{"id", "installed", "configured", "executable", "processStatus", "catalogStatus"}, need: needAll},
+	"provider": {omit: []string{"models"}, brief: []string{"harness", "slug", "access"}, need: catalogs},
+	"model":    {omit: []string{"metadata"}, brief: []string{"harness", "provider", "name", "cliSlug"}, need: catalogs},
+	"thinking": {brief: []string{"slug", "harness", "provider", "cliSlug"}, need: catalogs},
+	"skill":    {omit: []string{"content"}, brief: resourceBrief},
+	"agent":    {omit: []string{"content"}, brief: resourceBrief, need: Need{RuntimeAgents: true}},
+	"settings": {brief: []string{"path", "scope", "error"}},
 	"status":   {need: needAll},
 	"quota":    {live: true},
+}
+
+var resourceBrief = []string{"name", "description", "path", "harnesses", "scope", "source"}
+
+// briefText is how many characters of a state row's description stay; a
+// longer one is cut and ends in "…" (show prints it whole).
+const briefText = 160
+
+// brief is a record as a state row carries it: the noun's brief keys
+// alone, a description cut to briefText; a noun with no brief keys gives
+// its lean record.
+func brief(noun string, v any) (any, error) {
+	keep := specs[noun].brief
+	if len(keep) == 0 {
+		return lean(noun, v)
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	out := make(map[string]json.RawMessage, len(keep))
+	for _, k := range keep {
+		if raw, ok := m[k]; ok {
+			out[k] = raw
+		}
+	}
+	if raw, ok := out["description"]; ok {
+		var s string
+		if json.Unmarshal(raw, &s) == nil {
+			if s = oneLine(s); len([]rune(s)) > briefText {
+				s = string([]rune(s)[:briefText-1]) + "…"
+			}
+			out["description"], _ = json.Marshal(s)
+		}
+	}
+	return out, nil
 }
 
 // lean is a record as a list row carries it: its JSON without the noun's
@@ -143,7 +186,7 @@ func (t *Tool) shell() *ocli.Shell {
 		if err != nil {
 			return nil, err
 		}
-		rows, err := nounRows(noun, t.inventory(o, specs[noun].need), o, model, true)
+		rows, err := nounRows(noun, t.inventory(o, specs[noun].need), o, model, lean)
 		if err != nil {
 			return nil, err
 		}
@@ -194,7 +237,7 @@ func (t *Tool) shell() *ocli.Shell {
 		}, "the whole inventory, warnings included")
 	r.Define("status").
 		Verb("state", func(c ochazuke.Ctx) ochazuke.Result { return result(t.state(c.Args)) },
-			"every list's rows in one collection: {NOUN: [{id, label}]} for "+strings.Join(stateNouns(), ", ")+" (the catalog's state)").State()
+			"every list's rows in one collection, JSON Lines {noun, id, label, data: the brief record} for "+strings.Join(stateNouns(), ", ")+" (the catalog's state)").State()
 	r.Operations["status.state"] = withParams(r.Operations["status.state"], merged(collectParams, filterParams))
 	r.Operations["status.list"] = withParams(r.Operations["status.list"], merged(collectParams, formatParam))
 	r.Operations["status.show"] = withParams(r.Operations["status.show"], collectParams)
@@ -216,15 +259,15 @@ func (t *Tool) shell() *ocli.Shell {
 }
 
 // nounRows is one noun's rows from an inventory: the status counts, else
-// the noun's entries after the model filter. withData keeps each record
-// (lean); without it a row is its id and label, what a host's list needs.
-func nounRows(noun string, in Inventory, o Options, model string, withData bool) ([]Row, error) {
+// the noun's entries after the model filter, each record as shape gives it
+// (lean for a list, brief for the state).
+func nounRows(noun string, in Inventory, o Options, model string, shape func(string, any) (any, error)) ([]Row, error) {
 	rows := []Row{}
 	var err error
 	add := func(id, label string, value any) {
 		row := Row{ID: noun + "/" + id, Label: label}
-		if withData && err == nil {
-			row.Data, err = lean(noun, value)
+		if err == nil {
+			row.Data, err = shape(noun, value)
 		}
 		rows = append(rows, row)
 	}
@@ -242,8 +285,9 @@ func nounRows(noun string, in Inventory, o Options, model string, withData bool)
 
 // state is the catalog's state source: one collection covering every
 // noun's need, processes inspected once, and every list's rows as JSON
-// Lines tagged by noun (ochazuke/cli Row). Rows carry id and label only:
-// a host's list reads nothing else, and show prints the record.
+// Lines tagged by noun (ochazuke/cli Row). A row's data is its brief
+// record (specs' brief keys): enough for a host to draw a row's details
+// without a show, which prints the whole record.
 func (t *Tool) state(args ochazuke.Arguments) (ocli.Lines, error) {
 	o, model, err := t.options(args)
 	if err != nil {
@@ -259,7 +303,7 @@ func (t *Tool) state(args ochazuke.Arguments) (ocli.Lines, error) {
 	in := t.inventory(o, need)
 	var out ocli.Lines
 	for _, noun := range stateNouns() {
-		rows, err := nounRows(noun, in, o, model, false)
+		rows, err := nounRows(noun, in, o, model, brief)
 		if err != nil {
 			return nil, err
 		}

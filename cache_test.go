@@ -138,7 +138,8 @@ func TestCorruptCacheRecollects(t *testing.T) {
 }
 
 // The state verb answers every list in one collection: one inventory that
-// covers every noun's need, rows by noun with ids and labels only.
+// covers every noun's need, rows by noun with ids, labels and the brief
+// record.
 func TestStateAnswersEveryListInOneCollection(t *testing.T) {
 	w := newCacheWorld(t)
 	state := map[string][]map[string]any{}
@@ -158,8 +159,15 @@ func TestStateAnswersEveryListInOneCollection(t *testing.T) {
 	if len(state) != 2 || len(state["status"]) != 6 {
 		t.Fatalf("state nouns %v", state)
 	}
-	if rows := state["skill"]; len(rows) != 1 || rows[0]["id"] != "skill/skill:claude:/s/SKILL.md" || rows[0]["label"] != "s [claude]" || rows[0]["data"] != nil {
+	if rows := state["skill"]; len(rows) != 1 || rows[0]["id"] != "skill/skill:claude:/s/SKILL.md" || rows[0]["label"] != "s [claude]" {
 		t.Fatalf("skill rows %+v", rows)
+	}
+	data, _ := state["skill"][0]["data"].(map[string]any)
+	if data["name"] != "s" || data["path"] != "/s/SKILL.md" || data["content"] != nil || data["kind"] != nil {
+		t.Fatalf("a state skill row's data is its brief record: %+v", data)
+	}
+	if data, _ := state["status"][3]["data"].(map[string]any); data["kind"] != "skills" || data["count"] != 1.0 {
+		t.Fatalf("a state status row's data is its count: %+v", state["status"][3])
 	}
 	out := w.run("skill", "list", "--format", "jsonl") // covered by the state's collection
 	if !strings.HasPrefix(out, `{"noun":"skill","id":"skill/skill:claude:/s/SKILL.md","label":"s [claude]","data":{`) || !strings.Contains(out, `"path":"/s/SKILL.md"`) || strings.Count(out, "\n") != 1 {

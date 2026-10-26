@@ -148,3 +148,29 @@ func TestStatusRows(t *testing.T) {
 		t.Fatalf("status rows: %s", out)
 	}
 }
+
+// A state row's data keeps the noun's brief keys, a description on one
+// line cut to briefText characters; a noun with no brief keys keeps its
+// lean record.
+func TestBriefKeepsTheNounsKeys(t *testing.T) {
+	long := strings.Repeat("word ", 100)
+	got, err := brief("skill", Resource{ID: "skill:claude:/p", Kind: "skill", Name: "n", Description: "two\nlines " + long, Path: "/p", Harnesses: []string{"claude"}, Scope: "user", Access: "a", Content: "body", Metadata: map[string]any{"k": "v"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(got)
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	desc, _ := m["description"].(string)
+	if len(m) != 5 || m["name"] != "n" || m["path"] != "/p" || m["scope"] != "user" || m["content"] != nil || m["access"] != nil {
+		t.Fatalf("brief skill %s", b)
+	}
+	if !strings.HasPrefix(desc, "two lines word") || !strings.HasSuffix(desc, "…") || len([]rune(desc)) != briefText {
+		t.Fatalf("brief description %q (%d runes)", desc, len([]rune(desc)))
+	}
+	if got, _ := brief("status", StatusCount{"skills", 2}); got.(StatusCount).Count != 2 {
+		t.Fatalf("brief status %+v", got)
+	}
+}

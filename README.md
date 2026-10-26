@@ -141,12 +141,24 @@ Restart nabe after `o-nabe extension refresh o-ai`. A row's verbs run as `o-ai N
 
 ```js
 // o-ai status state
-{"noun":"harness","id":"harness/claude","label":"Claude Code"}
-{"noun":"skill","id":"skill/skill:claude:/Users/me/.claude/skills/review/SKILL.md","label":"review [claude]"}
+{"noun":"harness","id":"harness/claude","label":"claude","data":{"id":"claude","installed":true,"configured":true,"executable":"/Users/me/.local/bin/claude","processStatus":"3 running processes (including helpers)","catalogStatus":"live initialization metadata"}}
+{"noun":"skill","id":"skill/skill:claude:/Users/me/.claude/skills/review/SKILL.md","label":"review [claude]","data":{"name":"review","description":"Review a diff…","path":"/Users/me/.claude/skills/review/SKILL.md","harnesses":["claude"],"scope":"Claude user"}}
 // ... every row of harness, provider, model, thinking, skill, agent, settings, status
 ```
 
-State rows carry only `noun`, `id` and `label` (no `data`): a host's list reads nothing else and `show --target ID` prints the record, so the answer is about 1 MB instead of the 5.3 MB the eight lists printed with their records. A noun with no records has no lines. `NOUN list --format jsonl` prints the same line shape with `data` (the default `json` stays an array). nabe runs `status state` once at startup, then on its refresh interval, after a verb of the extension and on `extension refresh` (with `--fresh`), instead of eight `NOUN list` processes.
+A state row's `data` is the record's brief fields (`specs[noun].brief` in `shell.go`), enough for a host to draw a row's details without a `show`, which still prints the whole record:
+
+| Noun | `data` keys in the state |
+| --- | --- |
+| harness | `id`, `installed`, `configured`, `executable`, `processStatus`, `catalogStatus` |
+| provider | `harness`, `slug`, `access` |
+| model | `harness`, `provider`, `name`, `cliSlug` |
+| thinking | `slug`, `harness`, `provider`, `cliSlug` (the model is the row id without `:SLUG`) |
+| skill, agent | `name`, `description` (one line, cut to 160 characters with `…`), `path`, `harnesses`, `scope`, `source` |
+| settings | `path`, `scope`, `error` |
+| status | `kind`, `count` |
+
+On the owner's machine (8,262 rows) the answer is 2.35 MB, against 1.02 MB with ids and labels only and 5.4 MB for the eight lists' lean records. A noun with no records has no lines. `NOUN list --format jsonl` prints the same line shape with `data` (the default `json` stays an array). nabe runs `status state` once at startup, then on its refresh interval, after a verb of the extension and on `extension refresh` (with `--fresh`), instead of eight `NOUN list` processes.
 
 ## Next
 

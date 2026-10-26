@@ -29,7 +29,7 @@ Family plans, todos and the roadmap live in `~/hub/o-plans/` (`README.md` is the
 
 ## Invariants
 
-- A list's rows are `{id: "NOUN/ENTRY_ID", label, data}`; `show` prints the inventory record in the shape aiview always printed, and `data` is that record minus the noun's `specs` omit fields (content, metadata, ...). Change a record's JSON only with its consumers.
+- A list's rows are `{id: "NOUN/ENTRY_ID", label, data}`; `show` prints the inventory record in the shape aiview always printed, and `data` is that record minus the noun's `specs` omit fields (content, metadata, ...). A `status state` row's `data` is the record's `specs` brief keys only (a description cut to `briefText`): add a key there only when a host draws it, and measure the state (it was 2.35 MB for 8,262 rows). Change a record's JSON only with its consumers.
 - Every list verb declares `.Rows(noun)`; `TestCatalogDeclaresRowsForEveryNoun` pins it.
 - No TUI code and no key bindings here; a host renders. Never bind function keys.
 - No verb-specific branches outside the runtime: a feature is a noun, its verbs and rows. The collectors know no command line.
