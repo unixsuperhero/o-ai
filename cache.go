@@ -19,7 +19,8 @@ import (
 //	{schema: 1, entries: {KEY: {at, need, inventory}}}
 //
 // KEY is the options and environment a collection depends on (home,
-// project, timeout, no-probe, the harness environment variables); the
+// project, timeout, no-probe, the harness environment variables, the skill
+// sources after sources.json); the
 // filters (--harness, --provider, --model, --search) apply after
 // collection, so they share an entry. An entry serves a verb when it is
 // younger than the TTL and its need covers the verb's; processes are never
@@ -48,6 +49,7 @@ type cacheFile struct {
 
 // cacheKey is the collection's identity: what changes the inventory.
 func cacheKey(o Options) string {
+	sources, _ := skillSources(o) // a sources.json edit is a new collection
 	env := make([]string, len(cacheEnv))
 	for i, k := range cacheEnv {
 		env[i] = k + "=" + os.Getenv(k)
@@ -57,7 +59,8 @@ func cacheKey(o Options) string {
 		Timeout       time.Duration
 		NoProbe       bool
 		Env           []string
-	}{o.Home, o.Project, o.Timeout, o.NoProbe, env})
+		Sources       []Source
+	}{o.Home, o.Project, o.Timeout, o.NoProbe, env, sources})
 	return string(b)
 }
 

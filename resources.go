@@ -283,7 +283,11 @@ func mergeResources(resources []Resource) []Resource {
 		}
 	}
 	for i := range out {
-		out[i].ID = out[i].Kind + ":" + strings.Join(out[i].Harnesses, ",") + ":" + out[i].Path
+		owner := strings.Join(out[i].Harnesses, ",")
+		if owner == "" {
+			owner = out[i].Source // a source's own row: skill:ai-tools:PATH
+		}
+		out[i].ID = out[i].Kind + ":" + owner + ":" + out[i].Path
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out

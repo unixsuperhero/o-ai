@@ -150,11 +150,17 @@ State rows carry only `noun`, `id` and `label` (no `data`): a host's list reads 
 
 ## Next
 
-The nouns still to come, as verbs on this runtime: `mcp` (servers from `~/.claude.json`, `.mcp.json`, `~/.codex/config.toml`, omp), `mcp-tool` (start a stdio server, `initialize` + `tools/list`, stop it; pending work), and richer `agent` verbs. A sources file (`~/.config/o-ai/sources.json`) for roots the collectors do not discover, such as `~/proj/ai-tools/catalog/skills`, would be data merged over the built-ins by name:
+The nouns still to come, as verbs on this runtime: `mcp` (servers from `~/.claude.json`, `.mcp.json`, `~/.codex/config.toml`, omp), `mcp-tool` (start a stdio server, `initialize` + `tools/list`, stop it; pending work), and richer `agent` verbs.
+
+## Skill sources
+
+Skill roots outside every harness's search path are scanned directly. The built-in is `ai-tools` (`~/proj/ai-tools/catalog/skills`); `~/.config/o-ai/sources.json` (under `--home`) adds roots and replaces or removes built-ins by name, an empty path removing one:
 
 ```js
-sources = { skills: [{ name: "ai-tools", path: "~/proj/ai-tools/catalog/skills" }] }
+sources = { skills: [{ name: "team", path: "~/team/skills" }, { name: "ai-tools", path: "" }] }
 ```
+
+A source's skill that a harness also sees (the same file after links, such as `~/.claude/skills/review -> ~/proj/ai-tools/catalog/skills/review`) is not listed twice: the harness rows carry `source: "ai-tools"` and the source has no row of its own. A skill no harness links is a row of its own, `skill/skill:ai-tools:PATH`, labelled `NAME [ai-tools]`, scope `source`, with no harnesses (so `--harness` drops it). The sources file is part of the inventory cache key: editing it collects again.
 
 ## Data sources and limits
 

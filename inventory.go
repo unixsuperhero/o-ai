@@ -97,6 +97,7 @@ type Resource struct {
 	Harnesses    []string       `json:"harnesses"`
 	Scope        string         `json:"scope"`
 	Access       string         `json:"access"`
+	Source       string         `json:"source,omitempty"` // the skill source (sources.go) that holds the file
 	Metadata     map[string]any `json:"metadata,omitempty"`
 	Content      string         `json:"content,omitempty"`
 }

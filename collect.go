@@ -62,6 +62,9 @@ func CollectNeed(o Options, need Need) Inventory {
 		in.Warnings = append(in.Warnings, result.Warnings...)
 	}
 	sort.Slice(in.Models, func(i, j int) bool { return in.Models[i].ID < in.Models[j].ID })
+	sourced, warnings := collectSources(o, need)
+	in.Skills = dedupeSources(append(in.Skills, sourced...))
+	in.Warnings = append(in.Warnings, warnings...)
 	in.Skills = mergeResources(in.Skills)
 	in.Agents = mergeResources(in.Agents)
 	return in

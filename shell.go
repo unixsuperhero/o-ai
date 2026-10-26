@@ -300,6 +300,9 @@ func label(noun string, e Entry) string {
 	if noun == "thinking" {
 		name = e.Summary
 	}
+	if r, ok := e.Value.(Resource); ok && e.Harness == "" && r.Source != "" {
+		return oneLine(name) + " [" + r.Source + "]"
+	}
 	if noun == "harness" || e.Harness == "" {
 		return oneLine(name)
 	}

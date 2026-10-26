@@ -23,6 +23,7 @@ Family plans, todos and the roadmap live in `~/hub/o-plans/` (`README.md` is the
 | Inventory types, `Entries` (the projection every list reads), `categories` | `inventory.go` |
 | Collection: harness probing, settings parsing and redaction, processes, models and providers | `collect.go`, `catalogs.go` |
 | Skill and agent discovery, frontmatter, merging by path | `resources.go` |
+| Skill sources (`~/.config/o-ai/sources.json`, the built-in ai-tools catalog), folding a source's skill into the harness rows that see the same file | `sources.go` |
 | The quota noun: Claude and Codex logins, the usage endpoints, the Codex session-file fallback, quota rows | `quota.go` |
 | Tests: collectors and redaction (`main_test.go`), catalog, rows and `--target` (`shell_test.go`), the cache (`cache_test.go`), quota against httptest servers (`quota_test.go`) | `*_test.go` |
 
