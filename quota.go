@@ -93,9 +93,9 @@ func (t *Tool) defineQuota(r *ochazuke.Runtime, list *ochazuke.List) {
 	}
 	r.Define("quota").
 		Verb("list", func(c ochazuke.Ctx) ochazuke.Result { return t.quotaList(c.Args, list) },
-			"one row per rate-limit window: {id: quota/HARNESS:WINDOW, label, data: {usedPercent, remainingPercent, resetsAt, ...}}; a harness that cannot answer is one quota/HARNESS:error row").Rows("quota").
+			"one row per rate-limit window: {id: quota/HARNESS:WINDOW, label, data: {usedPercent, remainingPercent, resetsAt, ...}}; a harness that cannot answer is one quota/HARNESS:error row").Rows("quota").Fetch().
 		Verb("show", func(c ochazuke.Ctx) ochazuke.Result { return t.quotaShow(c) },
-			"a harness's quota record (claude or codex; none prints both): plan, source, observedAt, windows, error")
+			"a harness's quota record (claude or codex; none prints both): plan, source, observedAt, windows, error").Fetch()
 	listOp := withParams(r.Operations["quota.list"], merged(params, formatParam))
 	listOp.Positional = []string{"harness"} // quota list claude
 	r.Operations["quota.list"] = listOp

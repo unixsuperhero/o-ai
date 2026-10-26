@@ -232,9 +232,9 @@ func (t *Tool) shell() *ocli.Shell {
 	for _, noun := range categories {
 		b := r.Define(noun).
 			Verb("list", func(c ochazuke.Ctx) ochazuke.Result { return listed(noun, c.Args) },
-				"the "+noun+" rows: {id, label, data}, data the inventory record (--format jsonl: one tagged row per line)").Rows(noun).
+				"the "+noun+" rows: {id, label, data}, data the inventory record (--format jsonl: one tagged row per line)").Rows(noun).Fetch().
 			Verb("show", func(c ochazuke.Ctx) ochazuke.Result { return result(t.show(noun, c, false)) },
-				"one "+noun+" record: ENTRY (an id, name, slug or path) or --target ROW_ID")
+				"one "+noun+" record: ENTRY (an id, name, slug or path) or --target ROW_ID").Fetch()
 		params := merged(collectParams, filterParams, nounParams[noun])
 		r.Operations[noun+".list"] = withParams(r.Operations[noun+".list"], merged(params, formatParam))
 		r.Operations[noun+".show"] = withParams(r.Operations[noun+".show"], merged(params, entryParam))
@@ -247,6 +247,8 @@ func (t *Tool) shell() *ocli.Shell {
 			b.Verb("select", func(c ochazuke.Ctx) ochazuke.Result { return result(t.show(noun, c, true)) },
 				"save ENTRY as o-ai's model selection (~/.config/aiview/selection.json); model show with no ENTRY prints it")
 			r.Operations["model.select"] = withParams(r.Operations["model.select"], merged(params, entryParam))
+			// select writes the selection file: the one change o-ai makes.
+			setHistory(r, ochazuke.HistoryChange, "model.select")
 		}
 	}
 	// mcp tools [SERVER] is mcp-tool list: the tools of the server a
@@ -263,23 +265,23 @@ func (t *Tool) shell() *ocli.Shell {
 				}
 			}
 			return listed("mcp-tool", args)
-		}, "the tools a server exposes, as a harness cached them (omp): mcp-tool rows of SERVER, --server or the --target mcp row's server").Rows("mcp-tool")
+		}, "the tools a server exposes, as a harness cached them (omp): mcp-tool rows of SERVER, --server or the --target mcp row's server").Rows("mcp-tool").Fetch()
 	tools := r.Operations["mcp.tools"]
 	tools.Parameters, tools.Positional = r.Operations["mcp-tool.list"].Parameters, r.Operations["mcp-tool.list"].Positional
 	r.Operations["mcp.tools"] = tools
 	r.Define("status").
 		Verb("list", func(c ochazuke.Ctx) ochazuke.Result { return listed("status", c.Args) },
-			"how many records of each kind: {id, label, data: {kind, count}}").Rows("status").
+			"how many records of each kind: {id, label, data: {kind, count}}").Rows("status").Fetch().
 		Verb("show", func(c ochazuke.Ctx) ochazuke.Result {
 			o, _, err := t.options(c.Args)
 			if err != nil {
 				return ochazuke.Failed(err)
 			}
 			return ochazuke.Done(t.inventory(o, specs["status"].need))
-		}, "the whole inventory, warnings included")
+		}, "the whole inventory, warnings included").Fetch()
 	r.Define("status").
 		Verb("state", func(c ochazuke.Ctx) ochazuke.Result { return result(t.state(c.Args)) },
-			"every list's rows in one collection, JSON Lines {noun, id, label, data: the brief record} for "+strings.Join(stateNouns(), ", ")+" (the catalog's state)").State()
+			"every list's rows in one collection, JSON Lines {noun, id, label, data: the brief record} for "+strings.Join(stateNouns(), ", ")+" (the catalog's state)").State().Fetch()
 	r.Operations["status.state"] = withParams(r.Operations["status.state"], merged(collectParams, filterParams))
 	r.Operations["status.list"] = withParams(r.Operations["status.list"], merged(collectParams, formatParam))
 	r.Operations["status.show"] = withParams(r.Operations["status.show"], collectParams)
@@ -530,4 +532,19 @@ func (t *Tool) inventory(o Options, need Need) Inventory {
 func isDir(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+// setHistory declares the history kind (Operation.HistoryKind) of each
+// named verb, so none is left to the default: NounBuilder.Fetch marks a
+// read where it is declared, and the builder has no method for a change.
+// An unknown key panics, so a renamed verb is renamed here too.
+func setHistory(r *ochazuke.Runtime, kind string, keys ...string) {
+	for _, key := range keys {
+		op, ok := r.Operations[key]
+		if !ok {
+			panic("setHistory: no operation " + key)
+		}
+		op.HistoryKind = kind
+		r.Operations[key] = op
+	}
 }
