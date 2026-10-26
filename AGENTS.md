@@ -44,4 +44,4 @@ Family plans, todos and the roadmap live in `~/hub/o-plans/` (`README.md` is the
 
 ## Every commit
 
-`gofmt -l . && go vet ./... && go test -race ./...` green; `go run . catalog` prints schema 1. Commit on main, conventional messages, never amend. ochazuke (`v0.7.0`) and oden (`v0.1.1`) are required at their tags; an untracked `go.work` (`go work init . && go work use ../oden ../ochazuke`) builds against the sibling checkouts, and `GOWORK=off` builds from the tags as a fresh clone does.
+`gofmt -l . && go vet ./... && go test -race ./...` green; `go run . catalog` prints schema 1. Commit on main, conventional messages, never amend. ochazuke (`v0.8.0`) and oden (`v0.1.1`) are required at their tags; an untracked `go.work` (`go work init . && go work use ../oden ../ochazuke`) builds against the sibling checkouts, and `GOWORK=off` builds from the tags as a fresh clone does.
