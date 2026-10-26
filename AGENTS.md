@@ -24,6 +24,7 @@ Family plans, todos and the roadmap live in `~/hub/o-plans/` (`README.md` is the
 | Collection: harness probing, settings parsing and redaction, processes, models and providers | `collect.go`, `catalogs.go` |
 | Skill and agent discovery, frontmatter, merging by path | `resources.go` |
 | Skill sources (`~/.config/o-ai/sources.json`, the built-in ai-tools catalog), folding a source's skill into the harness rows that see the same file | `sources.go` |
+| Tables: each noun's catalog columns and its rows' cells (`tables`, `cellsOf`), the context-size spellings | `table.go` |
 | MCP servers from each harness's files (normalized, redacted), the tools omp cached in agent.db (`sqlite3 -readonly`, `mcp_tools:` rows only) | `mcp.go` |
 | The quota noun: Claude and Codex logins, the usage endpoints, the Codex session-file fallback, quota rows | `quota.go` |
 | Tests: collectors and redaction (`main_test.go`), catalog, rows and `--target` (`shell_test.go`), the cache (`cache_test.go`), quota against httptest servers (`quota_test.go`) | `*_test.go` |
@@ -32,6 +33,7 @@ Family plans, todos and the roadmap live in `~/hub/o-plans/` (`README.md` is the
 
 - A list's rows are `{id: "NOUN/ENTRY_ID", label, data}`; `show` prints the inventory record in the shape aiview always printed, and `data` is that record minus the noun's `specs` omit fields (content, metadata, ...). A `status state` row's `data` is the record's `specs` brief keys only (a description cut to `briefText`): add a key there only when a host draws it, and measure the state (it was 2.35 MB for 8,262 rows). Change a record's JSON only with its consumers.
 - Every list verb declares `.Rows(noun)`; `TestCatalogDeclaresRowsForEveryNoun` pins it.
+- A table noun's columns live once, in `tables` (table.go): the runtime noun declares them (the catalog's `columns`) and every row of the noun, list, jsonl or state, carries one cell per column (`TestRowsCarryCellsPerColumn`). A column change is a cells change in the same entry.
 - No TUI code and no key bindings here; a host renders. Never bind function keys.
 - No verb-specific branches outside the runtime: a feature is a noun, its verbs and rows. The collectors know no command line.
 - Read-only: nothing edits a harness's settings or sends an inference request, and no configured MCP server is started: tools come only from a harness's own cache. `model select` writes only `~/.config/aiview/selection.json`. `quota` reads the vendors' usage endpoints (a GET with the harness's login) and never refreshes or writes a login.

@@ -122,7 +122,7 @@ func (t *Tool) quotaList(args ochazuke.Arguments, list *ochazuke.List) ochazuke.
 	rows := quotaRows(quotas, t.clock())
 	items := make([]ochazuke.ListItem, len(rows))
 	for i, row := range rows {
-		items[i] = ochazuke.ListItem{ID: row.ID, Label: row.Label, Noun: "quota", Data: strings.TrimPrefix(row.ID, "quota/")}
+		items[i] = ochazuke.ListItem{ID: row.ID, Label: row.Label, Noun: "quota", Data: strings.TrimPrefix(row.ID, "quota/"), Cells: row.Cells}
 	}
 	if err := list.SetItems(items); err != nil {
 		return ochazuke.Failed(err)
@@ -228,11 +228,11 @@ func quotaRows(quotas []Quota, now time.Time) []Row {
 	rows := []Row{}
 	for _, q := range quotas {
 		if q.Error != "" {
-			rows = append(rows, Row{ID: "quota/" + q.Harness + ":error", Label: q.Harness + " quota unavailable: " + q.Error, Data: q})
+			rows = append(rows, Row{ID: "quota/" + q.Harness + ":error", Label: q.Harness + " quota unavailable: " + q.Error, Data: q, Cells: cellsOf("quota", q)})
 			continue
 		}
 		for _, w := range q.Windows {
-			rows = append(rows, Row{ID: "quota/" + q.Harness + ":" + w.key, Label: windowLabel(w), Data: w})
+			rows = append(rows, Row{ID: "quota/" + q.Harness + ":" + w.key, Label: windowLabel(w), Data: w, Cells: cellsOf("quota", w)})
 		}
 	}
 	return rows

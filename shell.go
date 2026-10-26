@@ -123,6 +123,9 @@ type Row struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
 	Data  any    `json:"data,omitempty"`
+	// Cells are the row's table cells, one per column its noun declares
+	// (table.go); none for a noun without columns.
+	Cells []string `json:"cells,omitempty"`
 }
 
 // StatusCount is a status row's data: how many records of a kind.
@@ -200,7 +203,7 @@ func (t *Tool) shell() *ocli.Shell {
 		}
 		items := make([]ochazuke.ListItem, len(rows))
 		for i, row := range rows {
-			items[i] = ochazuke.ListItem{ID: row.ID, Label: row.Label, Noun: noun, Data: strings.TrimPrefix(row.ID, noun+"/")}
+			items[i] = ochazuke.ListItem{ID: row.ID, Label: row.Label, Noun: noun, Data: strings.TrimPrefix(row.ID, noun+"/"), Cells: row.Cells}
 		}
 		return rows, lists[noun].SetItems(items)
 	}
@@ -273,6 +276,10 @@ func (t *Tool) shell() *ocli.Shell {
 	r.Operations["status.list"] = withParams(r.Operations["status.list"], merged(collectParams, formatParam))
 	r.Operations["status.show"] = withParams(r.Operations["status.show"], collectParams)
 	t.defineQuota(r, lists["quota"])
+	for noun, tb := range tables { // the catalog's columns, and the lists drawn as tables
+		r.Define(noun).Columns(tb.columns...)
+		lists[noun].SetColumns(tb.columns...)
+	}
 
 	sh := ocli.New(r, "o-ai", t.Stdin, t.Stdout, t.Stderr)
 	sh.Usage = ocli.DefaultUsage(t.Prog)
@@ -296,7 +303,7 @@ func nounRows(noun string, in Inventory, o Options, model string, shape func(str
 	rows := []Row{}
 	var err error
 	add := func(id, label string, value any) {
-		row := Row{ID: noun + "/" + id, Label: label}
+		row := Row{ID: noun + "/" + id, Label: label, Cells: cellsOf(noun, value)}
 		if err == nil {
 			row.Data, err = shape(noun, value)
 		}
@@ -358,7 +365,7 @@ func stateNouns() []string {
 func lines(noun string, rows []Row) ocli.Lines {
 	out := make(ocli.Lines, len(rows))
 	for i, r := range rows {
-		out[i] = ocli.Row{Noun: noun, ID: r.ID, Label: r.Label, Data: r.Data}
+		out[i] = ocli.Row{Noun: noun, ID: r.ID, Label: r.Label, Data: r.Data, Cells: r.Cells}
 	}
 	return out
 }

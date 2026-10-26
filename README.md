@@ -86,7 +86,20 @@ row = {
 }
 ```
 
-and `show` prints the whole record alone, unchanged from aiview. A list row's `data` is that record without its bulky fields, so a list stays small: skill and agent drop `content`, model `metadata`, harness `settings` (the settings noun lists them), provider `models` (`specs` in `shell.go`).
+and `show` prints the whole record alone, unchanged from aiview. A row of a table noun also carries `cells`, one per column its noun declares in the catalog (`columns`), so a host draws the list as a table:
+
+| Noun | Columns (the first never drops; the rest drop when narrow, last listed first) |
+| --- | --- |
+| skill, agent | name, source (the harnesses, else the skill source), scope, description (one line, 160 characters) |
+| model | model, harness, provider, context (`200k`, `1M`, from the catalog's metadata), thinking (the level slugs) |
+| harness | harness, state (installed, configured, missing), procs, catalog, executable |
+| provider | provider, harness, models (a count), access |
+| mcp | server, harness, scope, transport, command (with its args, or the url) |
+| mcp-tool | tool, server, description |
+| quota | harness, window, used, left, resets (local time) |
+| status | kind, count |
+
+thinking and settings rows have no cells (a plain list of labels). The same cells are on `--format jsonl` lines and the state's rows. A list row's `data` is that record without its bulky fields, so a list stays small: skill and agent drop `content`, model `metadata`, harness `settings` (the settings noun lists them), provider `models` (`specs` in `shell.go`).
 
 Help uses the same grouped command metadata as the runtime catalog, including the framework's nouns. A bare group (`o ai model` or `o ai provider`) lists its verbs without collecting inventory or contacting a provider; `--help` also works on groups and operations (`o ai model list --help`).
 
