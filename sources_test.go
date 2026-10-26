@@ -35,6 +35,7 @@ func TestSkillSourcesAreScannedAndDeduplicated(t *testing.T) {
 	catalog := filepath.Join(home, "proj", "ai-tools", "catalog", "skills")
 	put(t, filepath.Join(catalog, "linked", "SKILL.md"), "---\nname: linked\ndescription: seen through a link\n---\n")
 	put(t, filepath.Join(catalog, "solo", "SKILL.md"), "---\nname: solo\ndescription: in the catalog only\n---\n")
+	put(t, filepath.Join(home, ".omp", "agent", "config.yml"), "{}\n") // omp and claude configured, installed or not
 	if err := os.MkdirAll(filepath.Join(home, ".claude", "skills"), 0700); err != nil {
 		t.Fatal(err)
 	}
