@@ -294,6 +294,19 @@ func (t *Tool) shell() *ocli.Shell {
 	sh := ocli.New(r, "o-ai", t.Stdin, t.Stdout, t.Stderr)
 	sh.Usage = ocli.DefaultUsage(t.Prog)
 	sh.Version = Version
+	// The state's cache (ochazuke's StateCache) lives beside the inventory
+	// cache, scoped by what a collection depends on (cacheKey: home,
+	// project, environment, skill sources), and its fingerprint is the
+	// recorded inputs plus the processes (inputs.go).
+	sh.StateCache.Dir = filepath.Join(filepath.Dir(t.cachePath()), "state")
+	sh.StateCache.Scope = func(args ochazuke.Arguments) string {
+		o, _, err := t.options(args)
+		if err != nil {
+			return ""
+		}
+		return cacheKey(o)
+	}
+	sh.StateCache.Fingerprint = t.stateFingerprint
 	// Reveal makes the target row exist without collecting: show
 	// collects with its own arguments and looks the id up there.
 	sh.Reveal = func(target string) error {
@@ -341,14 +354,7 @@ func (t *Tool) state(args ochazuke.Arguments) (ocli.Lines, error) {
 	if err != nil {
 		return nil, err
 	}
-	var need Need
-	for _, noun := range stateNouns() {
-		n := specs[noun].need
-		need.Processes = need.Processes || n.Processes
-		need.Catalogs = need.Catalogs || n.Catalogs
-		need.RuntimeAgents = need.RuntimeAgents || n.RuntimeAgents
-	}
-	in := t.inventory(o, need)
+	in := t.inventory(o, stateNeed())
 	var out ocli.Lines
 	for _, noun := range stateNouns() {
 		rows, err := nounRows(noun, in, o, model, brief)

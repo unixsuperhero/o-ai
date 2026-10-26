@@ -45,6 +45,7 @@ func Collect(o Options) Inventory {
 // inspects processes (inspectProcesses does, per call).
 func CollectNeed(o Options, need Need) Inventory {
 	in := Inventory{CapturedAt: time.Now().UTC(), Project: o.Project}
+	o.inputs.add(filepath.SplitList(os.Getenv("PATH"))...) // a harness installed or removed
 	ids := []string{"omp", "claude", "codex", "pi", "opencode", "gemini", "clawed"}
 	results := make([]Inventory, len(ids))
 	var wg sync.WaitGroup
@@ -78,6 +79,10 @@ func collectHarness(o Options, need Need, id string) Inventory {
 	if err == nil {
 		c.harness.Installed = true
 		c.harness.Executable = exe
+		c.input(exe)
+		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+			c.input(resolved) // an upgrade replaces the link's target
+		}
 	}
 	c.root = filepath.Join(o.Home, "."+id)
 	switch id {
@@ -95,6 +100,7 @@ func collectHarness(o Options, need Need, id string) Inventory {
 	if id == "omp" || id == "pi" {
 		c.root = envDefault("PI_CODING_AGENT_DIR", c.root)
 	}
+	c.input(c.root)
 	_, err = os.Stat(c.root)
 	c.harness.Configured = err == nil
 	paths := []struct{ path, scope string }{}
@@ -137,6 +143,7 @@ func collectHarness(o Options, need Need, id string) Inventory {
 		add(filepath.Join(o.Project, ".gemini", "settings.json"), "project")
 	}
 	for _, p := range paths {
+		c.input(p.path)
 		settings, err := readConfig(p.path)
 		if os.IsNotExist(err) {
 			continue
@@ -179,6 +186,10 @@ func envDefault(key, fallback string) string {
 	}
 	return fallback
 }
+
+// input records paths the collection reads or looks for (inputs.go).
+func (c *collector) input(paths ...string) { c.options.inputs.add(paths...) }
+
 func (c *collector) warn(message string) { c.harness.Warnings = append(c.harness.Warnings, message) }
 
 // Never include parser excerpts: malformed configuration may contain credentials.

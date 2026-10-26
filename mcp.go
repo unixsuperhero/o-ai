@@ -82,6 +82,7 @@ func (c *collector) discoverMCP() {
 			continue
 		}
 		seen[f.path+"#"+f.key] = true
+		c.input(f.path)
 		cfg, err := readConfig(f.path)
 		if os.IsNotExist(err) {
 			continue
@@ -192,6 +193,7 @@ var sqlite3 = "sqlite3"
 // its expiry: omp would ask the server again.
 func (c *collector) ompMCPTools() {
 	db := filepath.Join(c.root, "agent.db")
+	c.input(db, db+"-wal") // sqlite writes the WAL first
 	if _, err := os.Stat(db); err != nil {
 		return
 	}

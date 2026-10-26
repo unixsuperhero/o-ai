@@ -63,6 +63,7 @@ func skillSources(o Options) ([]Source, string) {
 // missing root is no rows.
 func collectSources(o Options, need Need) ([]Resource, []string) {
 	sources, warning := skillSources(o)
+	o.inputs.add(sourcesPath(o.Home))
 	var warnings []string
 	if warning != "" {
 		warnings = append(warnings, warning)

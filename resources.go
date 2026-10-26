@@ -23,6 +23,7 @@ func (c *collector) discoverResources() {
 		roots = append(roots, resourceRoot{filepath.Join(root, "skills"), "skill", scope, access}, resourceRoot{filepath.Join(root, "agents"), "agent", scope, access})
 	}
 	access := "discovered in harness search path; session loading not verified"
+	c.input(projectAncestors(c.options.Project, c.options.Home)...) // a .git or a project dir added
 	add(c.root, "user", access)
 	for _, dir := range projectAncestors(c.options.Project, c.options.Home) {
 		add(filepath.Join(dir, "."+h), "project", access)
@@ -89,6 +90,7 @@ func (c *collector) discoverResources() {
 			path := text(meta, "config_file")
 			if path != "" {
 				path = expandPath(path, c.options.Home, c.root)
+				c.input(path)
 				if cfg, err := readConfig(path); err == nil {
 					meta = map[string]any{"registration": meta, "config": cfg}
 				} else {
@@ -131,6 +133,7 @@ func expandPath(path, home, base string) string {
 
 func (c *collector) claudePluginRoots(roots *[]resourceRoot) {
 	manifest := filepath.Join(c.root, "plugins", "installed_plugins.json")
+	c.input(manifest)
 	cfg, err := readConfig(manifest)
 	if os.IsNotExist(err) {
 		return
@@ -174,6 +177,7 @@ func (c *collector) scanResources(root resourceRoot) {
 		}
 		resolved, err := filepath.EvalSymlinks(path)
 		if os.IsNotExist(err) {
+			c.input(path) // a missing root: creating it changes its stat
 			return
 		}
 		if err != nil {
@@ -189,6 +193,10 @@ func (c *collector) scanResources(root resourceRoot) {
 			return
 		}
 		if info.IsDir() {
+			// A directory's stat changes when an entry comes or goes, so
+			// the files not read (all but SKILL.md and agents' .md) need
+			// no stat of their own.
+			c.input(path, resolved)
 			entries, err := os.ReadDir(path)
 			if err != nil {
 				c.warn("Cannot read resource directory " + path)
@@ -209,6 +217,7 @@ func (c *collector) scanResources(root resourceRoot) {
 		if root.kind == "agent" && filepath.Ext(path) != ".md" {
 			return
 		}
+		c.input(path, resolved)
 		b, err := readBounded(path)
 		if err != nil {
 			c.warn("Cannot read resource " + path)
@@ -305,7 +314,10 @@ func (c *collector) ompBundledAgents() {
 		return
 	}
 	start := len(c.inventory.Agents)
+	inputs := c.options.inputs
+	c.options.inputs = nil // a temporary directory, gone after this; the executable is the input
 	c.scanResources(resourceRoot{dir, "agent", "bundled", "reported by OMP bundled agent exporter"})
+	c.options.inputs = inputs
 	for i := start; i < len(c.inventory.Agents); i++ {
 		r := &c.inventory.Agents[i]
 		r.Path = c.harness.Executable + "#bundled/" + filepath.Base(r.Path)

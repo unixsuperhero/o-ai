@@ -19,6 +19,8 @@ type Options struct {
 	Server   string        // mcp and mcp-tool rows of this server name
 	Fresh    bool          // collect even when the cache holds a young inventory
 	TTL      time.Duration // how old a cached inventory may be
+
+	inputs *inputSet // the paths a collection reads (inputs.go); nil records nothing
 }
 
 // Need is the costly parts of a collection a noun reads; files (settings,

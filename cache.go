@@ -9,6 +9,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	ocli "github.com/unixsuperhero/ochazuke/cli"
 )
 
 // The inventory cache: one collection serves every verb run within the TTL,
@@ -31,7 +33,7 @@ import (
 // that wants a newer one asks with --fresh (nabe's explicit refresh).
 const defaultTTL = 5 * time.Minute
 
-const cacheSchema = 2 // 2: MCP servers and tools
+const cacheSchema = 3 // 2: MCP servers and tools; 3: entries checked against inputs.json
 
 // cacheEnv are the environment variables the collectors read.
 var cacheEnv = []string{"PATH", "XDG_CONFIG_HOME", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "PI_CODING_AGENT_DIR", "OMP_PROFILE", "OPENCODE_CONFIG", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"}
@@ -92,12 +94,13 @@ func (t *Tool) cachedInventory(o Options, key string, need Need) Inventory {
 	}
 	now := t.clock()
 	file := readCache(path)
+	inputs := readInputs(inputsPath(path))
 	if !o.Fresh && o.TTL > 0 {
 		if raw, ok := file.Entries[key]; ok {
 			var e cacheEntry
 			dec := json.NewDecoder(bytes.NewReader(raw))
 			dec.UseNumber() // metadata numbers print as collected
-			if dec.Decode(&e) == nil && e.Need.covers(need) && !now.Before(e.At) && now.Sub(e.At) < o.TTL {
+			if dec.Decode(&e) == nil && e.Need.covers(need) && !now.Before(e.At) && now.Sub(e.At) < o.TTL && inputs.Entries[key].fresh(e.At) {
 				return e.Inventory
 			}
 		}
@@ -106,6 +109,7 @@ func (t *Tool) cachedInventory(o Options, key string, need Need) Inventory {
 	if collect == nil {
 		collect = CollectNeed
 	}
+	o.inputs = &inputSet{}
 	in := collect(o, need)
 	raw, err := json.Marshal(cacheEntry{At: now, Need: need, Inventory: in})
 	if err == nil {
@@ -117,6 +121,22 @@ func (t *Tool) cachedInventory(o Options, key string, need Need) Inventory {
 		}
 		file.Entries[key] = raw
 		err = writeCache(path, file)
+	}
+	if err == nil {
+		// The inputs are stat'd after the collection: a file changed while
+		// it ran shows after the TTL.
+		e := inputsEntry{At: now, Need: need, Inputs: o.inputs.list()}
+		e.Stat = ocli.StatFingerprint(e.Inputs...)
+		for _, h := range in.Harnesses {
+			e.Harnesses = append(e.Harnesses, harnessExec{h.ID, h.Executable})
+		}
+		for k := range inputs.Entries {
+			if _, ok := file.Entries[k]; !ok {
+				delete(inputs.Entries, k)
+			}
+		}
+		inputs.Entries[key] = e
+		err = writeJSONAtomic(inputsPath(path), inputs)
 	}
 	if err != nil {
 		fmt.Fprintln(t.Stderr, "warning: inventory cache not written:", err)
@@ -140,8 +160,12 @@ func readCache(path string) cacheFile {
 
 // writeCache replaces the cache file atomically: a temporary file in the
 // same directory, renamed over it.
-func writeCache(path string, file cacheFile) error {
-	b, err := json.Marshal(file)
+func writeCache(path string, file cacheFile) error { return writeJSONAtomic(path, file) }
+
+// writeJSONAtomic replaces path with v's JSON: a temporary file in the same
+// directory, renamed over it.
+func writeJSONAtomic(path string, v any) error {
+	b, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}

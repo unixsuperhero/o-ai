@@ -89,6 +89,7 @@ func (c *collector) claudeModels() {
 
 func (c *collector) codexModels() {
 	path := filepath.Join(c.root, "models_cache.json")
+	c.input(path)
 	raw, err := readConfig(path)
 	if os.IsNotExist(err) {
 		return
@@ -203,6 +204,7 @@ func (c *collector) piModels() {
 		return
 	}
 	args := []string{"--input-type=module", "-e", piMetadataScript, filepath.Join(dist, "core", "model-registry.js"), filepath.Join(dist, "core", "auth-storage.js"), filepath.Join(c.root, "models.json"), filepath.Join(c.root, "auth.json"), capabilities}
+	c.input(args[3:]...)
 	b, err := runCommand(c.options, "node", args, "")
 	if err != nil {
 		c.warn(err.Error())
