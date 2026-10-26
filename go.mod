@@ -5,8 +5,8 @@ go 1.26.0
 require (
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/tailscale/hujson v0.0.0-20221223112325-20486734a56a
-	github.com/unixsuperhero/ochazuke v0.0.0-00010101000000-000000000000
-	github.com/unixsuperhero/oden v0.0.0-00010101000000-000000000000
+	github.com/unixsuperhero/ochazuke v0.1.0
+	github.com/unixsuperhero/oden v0.1.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -30,7 +30,3 @@ require (
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
-
-replace github.com/unixsuperhero/ochazuke => /Users/unixsuperhero/proj/ochazuke
-
-replace github.com/unixsuperhero/oden => /Users/unixsuperhero/proj/oden
