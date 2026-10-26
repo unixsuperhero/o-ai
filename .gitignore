@@ -3,3 +3,5 @@
 /aiview-linux
 /o-ai
 *.test
+go.work
+go.work.sum
