@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/tailscale/hujson v0.0.0-20221223112325-20486734a56a
-	github.com/unixsuperhero/ochazuke v0.8.0
+	github.com/unixsuperhero/ochazuke v0.9.0
 	github.com/unixsuperhero/oden v0.1.1
 	gopkg.in/yaml.v3 v3.0.1
 )
