@@ -9,14 +9,15 @@
 //	o-ai NOUN list [--harness H] [--provider P] [--model M] [--search TEXT]
 //	o-ai NOUN show ENTRY|--target ID
 //	o-ai model select ENTRY
+//	o-ai mcp tools [SERVER]          the tools omp cached for a server
 //	o-ai status show                 the whole inventory
 //	o-ai quota list [claude|codex]   rate-limit windows: % used, % left, resets
 //	o-ai quota show [claude|codex]   a harness's quota record
 //	o-ai NOUNs                       NOUN list (o-ai skills, o-ai models)
 //	o-ai catalog                     the nouns and verbs, for a host (nabe)
 //
-// NOUN is harness, provider, model, thinking, skill, agent, settings,
-// status or quota: an ochazuke runtime behind ochazuke/cli (shell.go), every verb
+// NOUN is harness, provider, model, thinking, skill, agent, settings, mcp,
+// mcp-tool, status or quota: an ochazuke runtime behind ochazuke/cli (shell.go), every verb
 // printing JSON. There is no TUI here: o tui (nabe) renders the rows after
 // o-nabe extension register o-ai.
 package main

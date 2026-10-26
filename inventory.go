@@ -16,6 +16,7 @@ type Options struct {
 	Harness  string
 	Provider string
 	Search   string
+	Server   string        // mcp and mcp-tool rows of this server name
 	Fresh    bool          // collect even when the cache holds a young inventory
 	TTL      time.Duration // how old a cached inventory may be
 }
@@ -103,14 +104,16 @@ type Resource struct {
 }
 
 type Inventory struct {
-	CapturedAt time.Time  `json:"capturedAt"`
-	Project    string     `json:"project"`
-	Harnesses  []Harness  `json:"harnesses"`
-	Providers  []Provider `json:"providers"`
-	Models     []Model    `json:"models"`
-	Skills     []Resource `json:"skills"`
-	Agents     []Resource `json:"agents"`
-	Warnings   []string   `json:"warnings,omitempty"`
+	CapturedAt time.Time   `json:"capturedAt"`
+	Project    string      `json:"project"`
+	Harnesses  []Harness   `json:"harnesses"`
+	Providers  []Provider  `json:"providers"`
+	Models     []Model     `json:"models"`
+	Skills     []Resource  `json:"skills"`
+	Agents     []Resource  `json:"agents"`
+	MCPServers []MCPServer `json:"mcpServers"`
+	MCPTools   []MCPTool   `json:"mcpTools"`
+	Warnings   []string    `json:"warnings,omitempty"`
 }
 
 // Entry is the shared projection used by the CLI and the TUI.
@@ -119,11 +122,12 @@ type Entry struct {
 	Name     string
 	Harness  string
 	Provider string
+	Server   string // an MCP server's or tool's server name
 	Summary  string
 	Value    any
 }
 
-var categories = []string{"harness", "provider", "model", "thinking", "skill", "agent", "settings"}
+var categories = []string{"harness", "provider", "model", "thinking", "skill", "agent", "settings", "mcp", "mcp-tool"}
 
 func (in Inventory) Entries(kind string, o Options) []Entry {
 	var rows []Entry
@@ -132,6 +136,9 @@ func (in Inventory) Entries(kind string, o Options) []Entry {
 			return
 		}
 		if o.Provider != "" && e.Provider != o.Provider {
+			return
+		}
+		if o.Server != "" && e.Server != o.Server {
 			return
 		}
 		if o.Search != "" && !strings.Contains(strings.ToLower(e.ID+" "+e.Name+" "+e.Summary), strings.ToLower(o.Search)) {
@@ -176,6 +183,14 @@ func (in Inventory) Entries(kind string, o Options) []Entry {
 				}{t, m.ID, m.Harness, m.Provider, m.CLISlug, append(append([]string{}, m.Args...), t.Args...)}
 				add(Entry{ID: m.ID + ":" + t.Slug, Name: t.Name, Harness: m.Harness, Provider: m.Provider, Summary: m.Name + " · " + t.Slug, Value: value})
 			}
+		}
+	case "mcp":
+		for _, s := range in.MCPServers {
+			add(Entry{ID: s.ID, Name: s.Name, Harness: s.Harness, Server: s.Name, Summary: s.Scope + " · " + s.Transport + " " + s.Command + s.URL, Value: s})
+		}
+	case "mcp-tool":
+		for _, t := range in.MCPTools {
+			add(Entry{ID: t.ID, Name: t.Server + "/" + t.Name, Harness: t.Harness, Server: t.Server, Summary: t.Description, Value: t})
 		}
 	case "skill", "agent":
 		resources := in.Skills

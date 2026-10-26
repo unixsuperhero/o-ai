@@ -144,7 +144,7 @@ func TestStatusRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, counts := rowsOf[StatusCount](t, out)
-	if len(rows) != 6 || rows[3].ID != "status/skills" || counts[3].Count < 1 {
+	if len(rows) != 8 || rows[3].ID != "status/skills" || counts[3].Count < 1 {
 		t.Fatalf("status rows: %s", out)
 	}
 }

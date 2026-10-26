@@ -59,6 +59,8 @@ func CollectNeed(o Options, need Need) Inventory {
 		in.Providers = append(in.Providers, result.Providers...)
 		in.Skills = append(in.Skills, result.Skills...)
 		in.Agents = append(in.Agents, result.Agents...)
+		in.MCPServers = append(in.MCPServers, result.MCPServers...)
+		in.MCPTools = append(in.MCPTools, result.MCPTools...)
 		in.Warnings = append(in.Warnings, result.Warnings...)
 	}
 	sort.Slice(in.Models, func(i, j int) bool { return in.Models[i].ID < in.Models[j].ID })
@@ -165,6 +167,7 @@ func collectHarness(o Options, need Need, id string) Inventory {
 	}
 	c.configuredModels()
 	c.discoverResources()
+	c.discoverMCP()
 	c.deriveProviders()
 	c.inventory.Harnesses = []Harness{c.harness}
 	return c.inventory

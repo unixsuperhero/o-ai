@@ -48,6 +48,8 @@ var specs = map[string]nounSpec{
 	"skill":    {omit: []string{"content"}, brief: resourceBrief},
 	"agent":    {omit: []string{"content"}, brief: resourceBrief, need: Need{RuntimeAgents: true}},
 	"settings": {brief: []string{"path", "scope", "error"}},
+	"mcp":      {brief: []string{"name", "harness", "scope", "transport", "command", "url", "disabled"}},
+	"mcp-tool": {omit: []string{"inputSchema"}, brief: []string{"server", "name", "description", "harness"}},
 	"status":   {need: needAll},
 	"quota":    {live: true},
 }
@@ -142,6 +144,12 @@ var formatParam = map[string]ochazuke.Parameter{
 	"format": {Type: "string", Enum: []string{"json", "jsonl"}, Description: "json (an array, the default) or jsonl (one {noun, id, label, data} per line, the state's shape)"},
 }
 
+// nounParams are the parameters only some nouns' list and show take.
+var nounParams = map[string]map[string]ochazuke.Parameter{
+	"mcp":      {"server": {Type: "string", Description: "exact MCP server name"}},
+	"mcp-tool": {"server": {Type: "string", Description: "exact MCP server name (its tools)"}},
+}
+
 var filterParams = map[string]ochazuke.Parameter{
 	"harness":  {Type: "string", Description: "exact harness id, e.g. omp, claude, codex"},
 	"provider": {Type: "string", Description: "exact provider slug"},
@@ -216,15 +224,38 @@ func (t *Tool) shell() *ocli.Shell {
 				"the "+noun+" rows: {id, label, data}, data the inventory record (--format jsonl: one tagged row per line)").Rows(noun).
 			Verb("show", func(c ochazuke.Ctx) ochazuke.Result { return result(t.show(noun, c, false)) },
 				"one "+noun+" record: ENTRY (an id, name, slug or path) or --target ROW_ID")
-		params := merged(collectParams, filterParams)
+		params := merged(collectParams, filterParams, nounParams[noun])
 		r.Operations[noun+".list"] = withParams(r.Operations[noun+".list"], merged(params, formatParam))
 		r.Operations[noun+".show"] = withParams(r.Operations[noun+".show"], merged(params, entryParam))
+		if _, ok := nounParams[noun]["server"]; ok { // mcp tools tuios: a bare word after list is the server
+			op := r.Operations[noun+".list"]
+			op.Positional = []string{"server"}
+			r.Operations[noun+".list"] = op
+		}
 		if noun == "model" {
 			b.Verb("select", func(c ochazuke.Ctx) ochazuke.Result { return result(t.show(noun, c, true)) },
 				"save ENTRY as o-ai's model selection (~/.config/aiview/selection.json); model show with no ENTRY prints it")
 			r.Operations["model.select"] = withParams(r.Operations["model.select"], merged(params, entryParam))
 		}
 	}
+	// mcp tools [SERVER] is mcp-tool list: the tools of the server a
+	// bare word, --server or a --target mcp row names (all with none).
+	r.Define("mcp").
+		Verb("tools", func(c ochazuke.Ctx) ochazuke.Result {
+			args := ochazuke.Arguments{}
+			for k, v := range c.Args {
+				args[k] = v
+			}
+			if c.Instance != nil && c.Instance.Noun == "mcp" && ochazuke.StringArg(args, "server", "") == "" {
+				if id, ok := c.Instance.Data.(string); ok {
+					args["server"] = id[strings.LastIndex(id, ":")+1:] // HARNESS:SCOPE:NAME
+				}
+			}
+			return listed("mcp-tool", args)
+		}, "the tools a server exposes, as a harness cached them (omp): mcp-tool rows of SERVER, --server or the --target mcp row's server").Rows("mcp-tool")
+	tools := r.Operations["mcp.tools"]
+	tools.Parameters, tools.Positional = r.Operations["mcp-tool.list"].Parameters, r.Operations["mcp-tool.list"].Positional
+	r.Operations["mcp.tools"] = tools
 	r.Define("status").
 		Verb("list", func(c ochazuke.Ctx) ochazuke.Result { return listed("status", c.Args) },
 			"how many records of each kind: {id, label, data: {kind, count}}").Rows("status").
@@ -358,7 +389,8 @@ func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 func statusCounts(in Inventory) []StatusCount {
 	return []StatusCount{
 		{"harnesses", len(in.Harnesses)}, {"providers", len(in.Providers)}, {"models", len(in.Models)},
-		{"skills", len(in.Skills)}, {"agents", len(in.Agents)}, {"warnings", len(in.Warnings)},
+		{"skills", len(in.Skills)}, {"agents", len(in.Agents)}, {"mcps", len(in.MCPServers)}, {"mcp-tools", len(in.MCPTools)},
+		{"warnings", len(in.Warnings)},
 	}
 }
 
@@ -417,6 +449,7 @@ func (t *Tool) options(args ochazuke.Arguments) (Options, string, error) {
 		Harness:  ochazuke.StringArg(args, "harness", ""),
 		Provider: ochazuke.StringArg(args, "provider", ""),
 		Search:   ochazuke.StringArg(args, "search", ""),
+		Server:   ochazuke.StringArg(args, "server", ""),
 	}
 	o.NoProbe, _ = args["no-probe"].(bool)
 	o.Fresh, _ = args["fresh"].(bool)

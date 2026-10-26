@@ -28,6 +28,8 @@ The nouns are an ochazuke runtime behind `ochazuke/cli`: `o-ai NOUN VERB [ENTRY]
 | `skill` | list, show | `Resource` (path, resolvedPath, frontmatter; content in show) |
 | `agent` | list, show | `Resource` |
 | `settings` | list, show | `Setting` |
+| `mcp` | list, show, tools | a configured MCP server: `harness`, `scope`, `config`, `transport`, `command`, `args`, `url`, env and header names (below) |
+| `mcp-tool` | list, show | a tool a harness cached for a server: `server`, `name`, `description`; `inputSchema` in show |
 | `status` | list, show, state | list: counts per kind; show: the whole inventory; state: every list at once (below) |
 | `quota` | list, show | a rate-limit window: `usedPercent`, `remainingPercent`, `resetsAt` (below) |
 
@@ -44,6 +46,8 @@ o ai skills                           # a plural is NOUN list
 o ai status show                      # the full inventory, warnings included
 o ai status state                     # every noun's rows from one collection, JSON Lines (the catalog's state)
 o ai skill list --format jsonl        # one {noun, id, label, data} per line
+o ai mcps                             # every configured MCP server of every harness
+o ai mcp tools tuios                  # the tuios server's tools (mcp-tool list tuios)
 o ai                                  # status list
 o-ai catalog                          # the nouns and verbs, for a host
 ```
@@ -86,7 +90,7 @@ and `show` prints the whole record alone, unchanged from aiview. A list row's `d
 
 Help uses the same grouped command metadata as the runtime catalog, including the framework's nouns. A bare group (`o ai model` or `o ai provider`) lists its verbs without collecting inventory or contacting a provider; `--help` also works on groups and operations (`o ai model list --help`).
 
-Words: a noun is resolved by unique prefix (`sk` is skill); `mo` is an explicit alias for model, even with the framework's mode and modal groups present. A verb accepts a unique prefix too (`mo li`, `mo se`; `mo s` is ambiguous between select and show). Ambiguity is an error, never a first match. A bare word after `show` or `select` is ENTRY (an id, name, slug or path; with several matches it is an error listing them, so narrow with `--harness`/`--provider` or use an id). After `list`, a bare word fills `--harness`.
+Words: a noun is resolved by unique prefix (`sk` is skill); `mo` is an explicit alias for model, even with the framework's mode and modal groups present. A verb accepts a unique prefix too (`mo li`, `mo se`; `mo s` is ambiguous between select and show). Ambiguity is an error, never a first match. A bare word after `show` or `select` is ENTRY (an id, name, slug or path; with several matches it is an error listing them, so narrow with `--harness`/`--provider` or use an id). After `list`, a bare word fills `--harness` (`--server` for `mcp list`, `mcp tools` and `mcp-tool list`).
 
 ### Parameters
 
@@ -160,9 +164,25 @@ A state row's `data` is the record's brief fields (`specs[noun].brief` in `shell
 
 On the owner's machine (8,262 rows) the answer is 2.35 MB, against 1.02 MB with ids and labels only and 5.4 MB for the eight lists' lean records. A noun with no records has no lines. `NOUN list --format jsonl` prints the same line shape with `data` (the default `json` stays an array). nabe runs `status state` once at startup, then on its refresh interval, after a verb of the extension and on `extension refresh` (with `--fresh`), instead of eight `NOUN list` processes.
 
+### MCP servers and tools
+
+`mcp list` reads the servers each harness configures, from its own files, without starting one:
+
+| Harness | Files (scope) |
+| --- | --- |
+| Claude Code | `~/.claude.json` `mcpServers` (user) and `projects[PROJECT].mcpServers` (local), `PROJECT/.mcp.json` (project) |
+| Codex | `~/.codex/config.toml` `[mcp_servers.*]` (user), `PROJECT/.codex/config.toml` |
+| omp | `~/.omp/agent/mcp.json` (user), `PROJECT/.omp/mcp.json`; a name in `disabledServers` is `disabled` |
+| Gemini | `~/.gemini/settings.json` and `PROJECT/.gemini/settings.json` `mcpServers` |
+| OpenCode | `opencode.json`/`opencode.jsonc` `mcp` (`type: local` with a command array, `type: remote`) |
+
+A row is `mcp/HARNESS:SCOPE:NAME`, labelled `NAME [HARNESS]`; `--server NAME` keeps one name. `env` and `headers` are names only, never values; `url` loses its credentials and query; an argument after or attached to a secret-looking flag (`--api-key VALUE`, `--token=VALUE`) and recognized token formats read `[REDACTED]`.
+
+`mcp-tool list [SERVER]` (also `mcp tools [SERVER]`, or `mcp tools --target mcp/...` for that row's server) lists the tools a server exposes **as a harness cached them**: omp keeps each server's `tools/list` answer in `~/.omp/agent/agent.db` (table `cache`, keys `mcp_tools:SERVER`, 30 days), which o-ai reads with `sqlite3 -readonly`, selecting those rows alone (the database also holds logins). A row is `mcp-tool/omp:SERVER/TOOL`, with `expiresAt` from the cache; `show` adds the `inputSchema`. The cache is keyed by server name, so a server another harness configures under the same name shows omp's tools for it. The other harnesses keep no tool list on disk: listing their servers' tools would mean starting each server (`initialize`, `tools/list`), which o-ai does not do (it is read-only and never runs a configured command), so a server omp has not connected to has no tool rows.
+
 ## Next
 
-The nouns still to come, as verbs on this runtime: `mcp` (servers from `~/.claude.json`, `.mcp.json`, `~/.codex/config.toml`, omp), `mcp-tool` (start a stdio server, `initialize` + `tools/list`, stop it; pending work), and richer `agent` verbs.
+Richer `agent` verbs; an opt-in `mcp-tool list --probe` that starts a stdio server, asks `tools/list` and stops it (pending work), for servers no harness has cached.
 
 ## Skill sources
 

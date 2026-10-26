@@ -31,7 +31,7 @@ import (
 // that wants a newer one asks with --fresh (nabe's explicit refresh).
 const defaultTTL = 5 * time.Minute
 
-const cacheSchema = 1
+const cacheSchema = 2 // 2: MCP servers and tools
 
 // cacheEnv are the environment variables the collectors read.
 var cacheEnv = []string{"PATH", "XDG_CONFIG_HOME", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "PI_CODING_AGENT_DIR", "OMP_PROFILE", "OPENCODE_CONFIG", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"}

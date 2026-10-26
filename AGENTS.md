@@ -1,6 +1,6 @@
 # o-ai: agent guide
 
-The AI hub's data tool (`o-ai`, so `o ai` and `mtm ai`). An oden app with an ochazuke runtime (`github.com/unixsuperhero/ochazuke`) behind `ochazuke/cli`: one noun per inventory kind (harness, provider, model, thinking, skill, agent, settings) plus status, every verb printing JSON. It was aiview (hub/ai/utils/aiview; its history is in this repository's log). It has no TUI: nabe (`o tui`) mounts its catalog as the page `ai`.
+The AI hub's data tool (`o-ai`, so `o ai` and `mtm ai`). An oden app with an ochazuke runtime (`github.com/unixsuperhero/ochazuke`) behind `ochazuke/cli`: one noun per inventory kind (harness, provider, model, thinking, skill, agent, settings, mcp, mcp-tool) plus status, every verb printing JSON. It was aiview (hub/ai/utils/aiview; its history is in this repository's log). It has no TUI: nabe (`o tui`) mounts its catalog as the page `ai`.
 
 ## Plans and todos
 
@@ -11,7 +11,7 @@ Family plans, todos and the roadmap live in `~/hub/o-plans/` (`README.md` is the
 1. This file, then `README.md` for the commands, the row shape and the aiview spellings.
 2. `../ochazuke/AGENTS.md`, section "Building an application on ochazuke", and `../ochazuke/cli/{shell.go,mount.go,catalog.go}`.
 3. `../nabe/README.md`: what a host reads (application nouns, a list verb with `rows`, rows `{id, label, data}`).
-4. `~/hub/o-plans/plans/cli-extensions.md`, section 6 (`mtm-ai`): the nouns still to come (mcp, mcp-tool).
+4. `~/hub/o-plans/plans/cli-extensions.md`, section 6 (`mtm-ai`): the plan the mcp and mcp-tool nouns came from.
 
 ## Where does X live
 
@@ -24,6 +24,7 @@ Family plans, todos and the roadmap live in `~/hub/o-plans/` (`README.md` is the
 | Collection: harness probing, settings parsing and redaction, processes, models and providers | `collect.go`, `catalogs.go` |
 | Skill and agent discovery, frontmatter, merging by path | `resources.go` |
 | Skill sources (`~/.config/o-ai/sources.json`, the built-in ai-tools catalog), folding a source's skill into the harness rows that see the same file | `sources.go` |
+| MCP servers from each harness's files (normalized, redacted), the tools omp cached in agent.db (`sqlite3 -readonly`, `mcp_tools:` rows only) | `mcp.go` |
 | The quota noun: Claude and Codex logins, the usage endpoints, the Codex session-file fallback, quota rows | `quota.go` |
 | Tests: collectors and redaction (`main_test.go`), catalog, rows and `--target` (`shell_test.go`), the cache (`cache_test.go`), quota against httptest servers (`quota_test.go`) | `*_test.go` |
 
@@ -33,7 +34,7 @@ Family plans, todos and the roadmap live in `~/hub/o-plans/` (`README.md` is the
 - Every list verb declares `.Rows(noun)`; `TestCatalogDeclaresRowsForEveryNoun` pins it.
 - No TUI code and no key bindings here; a host renders. Never bind function keys.
 - No verb-specific branches outside the runtime: a feature is a noun, its verbs and rows. The collectors know no command line.
-- Read-only: nothing edits a harness's settings or sends an inference request. `model select` writes only `~/.config/aiview/selection.json`. `quota` reads the vendors' usage endpoints (a GET with the harness's login) and never refreshes or writes a login.
+- Read-only: nothing edits a harness's settings or sends an inference request, and no configured MCP server is started: tools come only from a harness's own cache. `model select` writes only `~/.config/aiview/selection.json`. `quota` reads the vendors' usage endpoints (a GET with the harness's login) and never refreshes or writes a login.
 - `--no-probe` in every test that collects: tests never run the real harnesses. `TestMain` points `XDG_CACHE_HOME` at a temporary directory: tests never touch the user's cache.
 - A noun's collection cost is data (`specs[noun].need`), never a switch on its name; processes are never cached. A `live` noun (quota) is fetched per call, outside the inventory and the state.
 - Tests never reach the network or the user's keychain: `TestMain` replaces quota's transport and keychain reader, and quota tests inject httptest endpoints (`Tool.quota`).

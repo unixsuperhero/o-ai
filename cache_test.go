@@ -156,7 +156,7 @@ func TestStateAnswersEveryListInOneCollection(t *testing.T) {
 	}
 	// A noun with no records has no lines; the fake inventory has a skill
 	// and the status counts.
-	if len(state) != 2 || len(state["status"]) != 6 {
+	if len(state) != 2 || len(state["status"]) != 8 {
 		t.Fatalf("state nouns %v", state)
 	}
 	if rows := state["skill"]; len(rows) != 1 || rows[0]["id"] != "skill/skill:claude:/s/SKILL.md" || rows[0]["label"] != "s [claude]" {
