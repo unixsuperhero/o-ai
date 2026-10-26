@@ -178,6 +178,14 @@ func merged(ms ...map[string]ochazuke.Parameter) map[string]ochazuke.Parameter {
 
 func (t *Tool) shell() *ocli.Shell {
 	r := ochazuke.NewRuntime()
+	// The framework registers settings.* for an app's own settings.json
+	// (ochazuke v0.2.0). o-ai declares no settings and its settings noun is
+	// the inventory kind, so the noun is the inventory's alone.
+	for key, op := range r.Operations {
+		if op.Noun == "settings" {
+			delete(r.Operations, key)
+		}
+	}
 	lists := map[string]*ochazuke.List{}
 	for _, noun := range nouns {
 		list, err := r.AddList("list/"+noun, nil)
