@@ -23,14 +23,9 @@ func TestEveryVerbDeclaresItsHistory(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &doc); err != nil {
 		t.Fatal(err)
 	}
-	// The framework's verbs, less settings.*: shell drops those, and the
-	// settings noun is the inventory kind's.
+	// The framework's verbs are keyed app.<noun>.<verb> (ochazuke v0.16.0),
+	// so o-ai's own settings.* (DefineOwn) is never mistaken for them.
 	framework := ochazuke.NewRuntime().Operations
-	for key, op := range framework {
-		if op.Noun == "settings" {
-			delete(framework, key)
-		}
-	}
 	tool := &Tool{Stdin: strings.NewReader(""), Stdout: io.Discard, Stderr: io.Discard, Env: os.Environ(), Prog: "o-ai"}
 	ops := tool.shell().Runtime.Operations
 	n := 0
@@ -64,5 +59,25 @@ func TestVerbHistoryKinds(t *testing.T) {
 		if got := ops[key].HistoryKind; got != want {
 			t.Errorf("%s: %q, want %q", key, got, want)
 		}
+	}
+}
+
+// TestSettingsNounIsOAIsOwn: o-ai's settings noun owns the short name
+// (DefineOwn), so `settings list` is the inventory kind's verb, and the
+// framework's settings verbs stay reachable as app.settings.
+func TestSettingsNounIsOAIsOwn(t *testing.T) {
+	tool := &Tool{Stdin: strings.NewReader(""), Stdout: io.Discard, Stderr: io.Discard, Env: os.Environ(), Prog: "o-ai"}
+	r := tool.shell().Runtime
+	if got := r.CanonicalNoun("settings"); got != "settings" {
+		t.Fatalf("settings resolves to %q, want o-ai's own", got)
+	}
+	if op, ok := r.Operation("settings.list"); !ok || op.Builtin {
+		t.Fatalf("settings.list is not o-ai's: %+v", op)
+	}
+	if _, ok := r.Operation("settings.set"); ok {
+		t.Fatal("settings.set reaches the framework's verb through o-ai's noun")
+	}
+	if op, ok := r.Operation("app.settings.path"); !ok || !op.Builtin {
+		t.Fatalf("app.settings.path is not the framework's: %+v", op)
 	}
 }
