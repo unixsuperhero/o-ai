@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="o-ai">
+<title>o-ai</title>
+<rect width="128" height="128" rx="28" fill="#121a33"/>
+<path d="M14 98C30 98 26 64 38 64" fill="none" stroke="#9db6ff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="36" y="46" width="26" height="36" rx="7" fill="#4a72f0"/>
+<path d="M62 55H74M62 73H74" stroke="#e3e9ff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="84" y="36" width="28" height="56" rx="9" fill="#e3e9ff"/>
+<path d="M94 55H102M94 73H102" stroke="#121a33" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
