@@ -1,10 +1,30 @@
-# o-ai
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img alt="o-ai" src="assets/logo-light.svg" width="120">
+  </picture>
+  <br>
+  <a href="go.mod"><img alt="Go version" src="https://img.shields.io/github/go-mod/go-version/unixsuperhero/o-ai"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/unixsuperhero/o-ai"></a>
+</p>
+
+<p align="center">Your local AI setup as JSON: the harnesses, providers, models, skills, agents, settings, MCP servers and quotas on this machine, inspected without a single model request.</p>
+
+<p align="center"><img alt="o-ai over an invented setup: status counts, the harnesses and their state, skills by unique prefix, one skill's record, the configured MCP servers, and the same tool as mtm ai" src="assets/demo.gif" width="720"></p>
 
 The AI hub's data tool: the local AI harnesses (omp, Claude Code, Codex, Pi, OpenCode, Gemini, `clawed`) and their providers, models, thinking levels, skills, agents and settings, inspected without making a model request. It was `aiview` (hub/ai/utils/aiview, whose history this repository carries); it is now a family tool, so `o ai ...` and `mtm ai ...` run it, and nabe mounts it as a page.
 
 Every verb prints JSON. There is no TUI in this repository: nabe is the TUI (`o tui`, below).
 
 ## Install
+
+Module `github.com/unixsuperhero/o-ai`; requires Go 1.26 or newer.
+
+```sh
+go install github.com/unixsuperhero/o-ai@latest
+```
+
+or, from a checkout:
 
 ```sh
 go build -o ~/bin/o-ai .
@@ -13,9 +33,40 @@ o ai skill list      # through the o root
 mtm ai skill list    # through mtm (its second lookup prefix is o)
 ```
 
-Until ochazuke and oden are tagged, `go.mod` replaces them with the local checkouts in `~/proj`.
+`go.mod` requires ochazuke (`v0.16.0`) and oden (`v0.1.1`) at their tags, so a fresh clone builds as is. For work across the family, an untracked `go.work` (`go work init . && go work use ../oden ../ochazuke`) builds against the sibling checkouts; `GOWORK=off` builds from the tags.
 
-## Commands
+## Usage
+
+A first look, over the invented setup the demo uses (two Claude Code skills and an agent, Claude and Codex settings, an MCP server each; [docs/vhs](docs/vhs)). Every verb prints JSON; lists are rows of `{id, label, data, cells}`:
+
+```console
+$ o-ai status list
+[
+  {"id":"status/harnesses","label":"harnesses: 7","data":{"kind":"harnesses","count":7},"cells":["harnesses","7"]},
+  {"id":"status/providers","label":"providers: 2","data":{"kind":"providers","count":2},"cells":["providers","2"]},
+  {"id":"status/models","label":"models: 2","data":{"kind":"models","count":2},"cells":["models","2"]},
+  ...
+]
+$ o-ai mcp list | jq -c '.[0]'
+{"id":"mcp/claude:user:weather","label":"weather [claude]","data":{"id":"claude:user:weather","name":"weather","harness":"claude","scope":"user","config":"/private/tmp/oai.XXXX/home/.claude.json","transport":"http","url":"https://weather.example.com/mcp"},"cells":["weather","claude","user","http","https://weather.example.com/mcp"]}
+$ o-ai sk li | jq -r '.[].label'          # sk li is skill list
+release-notes [claude]
+review [claude]
+$ o-ai skill show review | jq '{name, description, harnesses, scope}'
+{
+  "name": "review",
+  "description": "Review a diff for bugs, missing tests and unclear names.",
+  "harnesses": [
+    "claude"
+  ],
+  "scope": "user"
+}
+$ mtm ai model list | jq -r '.[].label'   # the same tool through mtm
+opus [claude]
+gpt-5-codex [codex]
+```
+
+### Commands
 
 The nouns are an ochazuke runtime behind `ochazuke/cli`: `o-ai NOUN VERB [ENTRY] [--ARG VALUE] [--target ROW_ID]`.
 
@@ -52,6 +103,29 @@ o ai                                  # status list
 o-ai catalog                          # the nouns and verbs, for a host
 ```
 
+Help uses the same grouped command metadata as the runtime catalog, including the framework's nouns. A bare group (`o ai model` or `o ai provider`) lists its verbs without collecting inventory or contacting a provider; `--help` also works on groups and operations (`o ai model list --help`).
+
+Words: a noun is resolved by unique prefix (`sk` is skill); `mo` is an explicit alias for model, even with the framework's mode and modal groups present. A verb accepts a unique prefix too (`mo li`, `mo se`; `mo s` is ambiguous between select and show). Ambiguity is an error, never a first match. A bare word after `show` or `select` is ENTRY (an id, name, slug or path; with several matches it is an error listing them, so narrow with `--harness`/`--provider` or use an id). After `list`, a bare word fills `--harness` (`--server` for `mcp list`, `mcp tools` and `mcp-tool list`).
+
+### Parameters
+
+| Parameter | Behavior |
+| --- | --- |
+| `--harness NAME` | Filter by exact harness ID |
+| `--provider NAME` | Filter by exact provider slug |
+| `--model NAME` | Filter model/thinking rows by model ID, slug, or display name |
+| `--search TEXT` | Case-insensitive name, ID, and description search |
+| `--project DIRECTORY` | Inspect a project other than the current directory |
+| `--home DIRECTORY` | Use another home for file discovery and child processes |
+| `--timeout 15s` | Per-metadata-command deadline; quota's usage request deadline |
+| `--no-probe` | Skip native harness commands; inspect files and caches only |
+| `--fresh` | Collect now, even if the inventory cache is young |
+| `--ttl 5m` | How old a cached inventory may be (`0s` always collects) |
+| `--json '{...}'` | The parameters as one JSON object (`--json '{"harness":"omp"}'`) |
+| `--target ROW_ID` | The row a show or select acts on (an `id` from the list) |
+
+Parameters come after NOUN VERB. Collection warnings go to stderr.
+
 ### Quota
 
 `quota` is how much of the plan's rate-limit windows Claude Code and Codex have used and have left, fetched on every call (never cached, not in `status state`):
@@ -74,6 +148,23 @@ row = {
 ```
 
 Claude's windows are the usage answer's `limits` (`session`, `weekly_all`, `weekly_scoped (MODEL)`), else `five_hour` and `seven_day`. Codex's are `primary (5h)` and `secondary (7d)`, named by their length. `source` is `api` (the usage endpoint) or `session` (Codex's newest session file, observed at the file's modification time; a window that has reset since is `stale`, and its label says so). A harness that cannot answer (no login, an API-key Codex login, an expired Claude token, a network error) is one row `quota/HARNESS:error` whose label says why, and `show` prints it as `error`. `quota list` fails only when no harness answered. `--timeout` is the request's deadline (15s).
+
+### From aiview
+
+| aiview | o-ai |
+| --- | --- |
+| `aiview model list --harness omp` | `o ai model list --harness omp` |
+| `aiview list model`, `aiview show model ID` | `o ai model list`, `o ai model show ID` (the verb-first spelling is gone) |
+| `aiview status`, `aiview status --json` | `o ai status list` (counts), `o ai status show` (the inventory) |
+| `aiview NOUN list --json` (array of records) | `o ai NOUN list` (rows; each record is a row's `data`) |
+| `--json` (JSON output) | gone: output is always JSON; `--json` now takes the parameters as an object |
+| flags before the command words | flags after NOUN VERB |
+| `aiview tui` | `o tui`, after `o-nabe extension register o-ai` |
+| `aiview --help` | `o-ai help` |
+
+## Concepts
+
+### Rows
 
 A list is rows:
 
@@ -101,29 +192,6 @@ and `show` prints the whole record alone, unchanged from aiview. A row of a tabl
 
 thinking and settings rows have no cells (a plain list of labels). The same cells are on `--format jsonl` lines and the state's rows. A list row's `data` is that record without its bulky fields, so a list stays small: skill and agent drop `content`, model `metadata`, harness `settings` (the settings noun lists them), provider `models` (`specs` in `shell.go`).
 
-Help uses the same grouped command metadata as the runtime catalog, including the framework's nouns. A bare group (`o ai model` or `o ai provider`) lists its verbs without collecting inventory or contacting a provider; `--help` also works on groups and operations (`o ai model list --help`).
-
-Words: a noun is resolved by unique prefix (`sk` is skill); `mo` is an explicit alias for model, even with the framework's mode and modal groups present. A verb accepts a unique prefix too (`mo li`, `mo se`; `mo s` is ambiguous between select and show). Ambiguity is an error, never a first match. A bare word after `show` or `select` is ENTRY (an id, name, slug or path; with several matches it is an error listing them, so narrow with `--harness`/`--provider` or use an id). After `list`, a bare word fills `--harness` (`--server` for `mcp list`, `mcp tools` and `mcp-tool list`).
-
-### Parameters
-
-| Parameter | Behavior |
-| --- | --- |
-| `--harness NAME` | Filter by exact harness ID |
-| `--provider NAME` | Filter by exact provider slug |
-| `--model NAME` | Filter model/thinking rows by model ID, slug, or display name |
-| `--search TEXT` | Case-insensitive name, ID, and description search |
-| `--project DIRECTORY` | Inspect a project other than the current directory |
-| `--home DIRECTORY` | Use another home for file discovery and child processes |
-| `--timeout 15s` | Per-metadata-command deadline; quota's usage request deadline |
-| `--no-probe` | Skip native harness commands; inspect files and caches only |
-| `--fresh` | Collect now, even if the inventory cache is young |
-| `--ttl 5m` | How old a cached inventory may be (`0s` always collects) |
-| `--json '{...}'` | The parameters as one JSON object (`--json '{"harness":"omp"}'`) |
-| `--target ROW_ID` | The row a show or select acts on (an `id` from the list) |
-
-Parameters come after NOUN VERB. Collection warnings go to stderr.
-
 ### The inventory cache
 
 A collection is cached in `$XDG_CACHE_HOME/o-ai/inventory.json` (else `~/.cache/o-ai/inventory.json`), mode `0600`, so a host that lists every noun (nabe, at mount and refresh) collects once. An entry is keyed by what changes the inventory: `--home`, `--project`, `--timeout`, `--no-probe` and the harness environment (`PATH`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, ...); the filters apply after collection and share it. It serves a verb while younger than `--ttl` (5 min; a host asks for a newer one with `--fresh`) and when it holds what the noun needs: skill and settings read files only, agent adds the runtime agents (Claude initialization, OMP's exporter), provider, model and thinking add the native catalogs, harness and status everything. Process status is never cached; harness and status inspect processes on every call. The file is replaced atomically under `inventory.json.lock`, so concurrent callers wait for one collection; a missing or corrupt file means collecting, never an error.
@@ -134,27 +202,7 @@ A model's stable inventory ID includes its harness and provider, such as `omp:op
 
 `model select` saves only o-ai's selection, in `~/.config/aiview/selection.json` (aiview's file, kept so an existing selection survives the rename), mode `0600`. It does not change a harness's selected model.
 
-### From aiview
-
-| aiview | o-ai |
-| --- | --- |
-| `aiview model list --harness omp` | `o ai model list --harness omp` |
-| `aiview list model`, `aiview show model ID` | `o ai model list`, `o ai model show ID` (the verb-first spelling is gone) |
-| `aiview status`, `aiview status --json` | `o ai status list` (counts), `o ai status show` (the inventory) |
-| `aiview NOUN list --json` (array of records) | `o ai NOUN list` (rows; each record is a row's `data`) |
-| `--json` (JSON output) | gone: output is always JSON; `--json` now takes the parameters as an object |
-| flags before the command words | flags after NOUN VERB |
-| `aiview tui` | `o tui`, after `o-nabe extension register o-ai` |
-| `aiview --help` | `o-ai help` |
-
-## The TUI is nabe
-
-```sh
-MTM_SERVER=default o-nabe extension register o-ai   # registers as "ai"
-o tui                                               # a page ai with one list per noun
-```
-
-Restart nabe after `o-nabe extension refresh o-ai`. A row's verbs run as `o-ai NOUN VERB --target ROW_ID --json '{}' --yes`.
+### The state
 
 `status state` is the catalog's state source (`"state": "status.state"`, the ochazuke/cli convention): one process, one collection covering every noun's need, processes inspected once, answering every list as JSON Lines, one row per line tagged with its noun, no outer array:
 
@@ -197,11 +245,7 @@ A row is `mcp/HARNESS:SCOPE:NAME`, labelled `NAME [HARNESS]`; `--server NAME` ke
 
 `mcp-tool list [SERVER]` (also `mcp tools [SERVER]`, or `mcp tools --target mcp/...` for that row's server) lists the tools a server exposes **as a harness cached them**: omp keeps each server's `tools/list` answer in `~/.omp/agent/agent.db` (table `cache`, keys `mcp_tools:SERVER`, 30 days), which o-ai reads with `sqlite3 -readonly`, selecting those rows alone (the database also holds logins). A row is `mcp-tool/omp:SERVER/TOOL`, with `expiresAt` from the cache; `show` adds the `inputSchema`. The cache is keyed by server name, so a server another harness configures under the same name shows omp's tools for it. The other harnesses keep no tool list on disk: listing their servers' tools would mean starting each server (`initialize`, `tools/list`), which o-ai does not do (it is read-only and never runs a configured command), so a server omp has not connected to has no tool rows.
 
-## Next
-
-Richer `agent` verbs; an opt-in `mcp-tool list --probe` that starts a stdio server, asks `tools/list` and stops it (pending work), for servers no harness has cached.
-
-## Skill sources
+### Skill sources
 
 Skill roots outside every harness's search path are scanned directly. The built-in is `ai-tools` (`~/proj/ai-tools/catalog/skills`); `~/.config/o-ai/sources.json` (under `--home`) adds roots and replaces or removes built-ins by name, an empty path removing one:
 
@@ -211,7 +255,7 @@ sources = { skills: [{ name: "team", path: "~/team/skills" }, { name: "ai-tools"
 
 A source's skill that a harness also sees (the same file after links, such as `~/.claude/skills/review -> ~/proj/ai-tools/catalog/skills/review`) is not listed twice: the harness rows carry `source: "ai-tools"` and the source has no row of its own. A skill no harness links is a row of its own, `skill/skill:ai-tools:PATH`, labelled `NAME [ai-tools]`, scope `source`, with no harnesses (so `--harness` drops it). The sources file is part of the inventory cache key: editing it collects again.
 
-## Data sources and limits
+### Data sources and limits
 
 | Harness | Model metadata | Settings and resources |
 | --- | --- | --- |
@@ -223,7 +267,7 @@ A source's skill that a harness also sees (the same file after links, such as `~
 | Gemini | Configured model only, no inferred capability catalog | User/project settings and discovered resource files |
 | `clawed` | Probed only if an executable with that name exists; expects Claude-compatible initialization | Its own configuration directory |
 
-### Quota
+#### Quota
 
 `quota` makes a read-only HTTPS `GET` to each vendor's usage endpoint with the harness's own login, never an inference request, and never refreshes or writes a login:
 
@@ -242,11 +286,36 @@ Resource entries include their source path, resolved symlink target, frontmatter
 
 Settings retain file provenance and scope rather than claiming to reproduce every harness's effective session configuration. Explicit command-line overlays, managed enterprise policy, remote profiles, and live session overrides may differ. An OMP profile requires the corresponding `PI_CODING_AGENT_DIR` for file inspection; otherwise a warning explains the discrepancy. Malformed settings remain listed with an error, without dumping their unparsed contents.
 
-## Safety
+### Safety
 
 o-ai does not edit harness settings or launch an inference request; `quota` reads the vendors' usage endpoints only. Native metadata commands can update their own caches and load trusted harness configuration. OMP bundled agents are exported into an owned temporary directory, read, then removed. Use `--no-probe` when only file inspection is wanted.
 
 Settings and metadata redact secret-bearing fields, credential/header/environment containers, command hooks, recognized token formats, and URL credentials/query strings. Resource bodies remain inspectable with recognized token formats redacted. This is not a guarantee that arbitrary prose cannot contain a secret; do not publish a full inventory without reviewing it.
+
+## In the family
+
+o-ai is one of the family's `o-*` tools: an [oden](https://github.com/unixsuperhero/oden) app whose nouns are an [ochazuke](https://github.com/unixsuperhero/ochazuke) runtime behind `ochazuke/cli`, with no TUI of its own.
+
+| Where | How o-ai appears |
+| --- | --- |
+| `o ai ...` | oden's `o` root runs any `o-<tool>` on PATH. |
+| `mtm ai ...` | [matomeru](https://github.com/unixsuperhero/matomeru)'s `mtm` discovers the family's `o-<sub>` tools after its own `mtm-<sub>` bins, so `mtm ai` runs `o-ai` unless an `mtm-ai` is on PATH. |
+| nabe (`o tui`) | The TUI host mounts o-ai's catalog as the page `ai`, one list per noun, fed by `status state`. |
+
+### The TUI is nabe
+
+```sh
+MTM_SERVER=default o-nabe extension register o-ai   # registers as "ai"
+o tui                                               # a page ai with one list per noun
+```
+
+Restart nabe after `o-nabe extension refresh o-ai`. A row's verbs run as `o-ai NOUN VERB --target ROW_ID --json '{}' --yes`.
+
+The state nabe reads is under [Concepts](#the-state).
+
+## Next
+
+Richer `agent` verbs; an opt-in `mcp-tool list --probe` that starts a stdio server, asks `tools/list` and stops it (pending work), for servers no harness has cached.
 
 ## Development
 
@@ -257,3 +326,9 @@ go build .
 ```
 
 The tests cover command ambiguity, the catalog (schema 1, `rows` on every list), row ids and `--target`, model selection, reasoning arguments, credential redaction, JSONC/TOML parsing, invalid configuration visibility, symlink cycles, non-chat launch handling, and script-based process identity. Real native commands must also be exercised after adapter changes (`o-ai status show`), and the nabe page after catalog changes (`o-nabe extension refresh o-ai && o-tui --smoke`).
+
+## Logo and demo
+
+The logo is the letters "ai" in the family's rounded stroke with a spark for the i's dot: ai (藍) is indigo, and o-ai looks at the AI on a machine. An alternative, Unplugged (a plug kept out of its socket, because o-ai never makes a model request), is in [docs/logo/alt](docs/logo/alt) while the choice is open. `python3 docs/logo/build.py` writes both sets (`assets/icon.svg`, `assets/logo-light.svg`, `assets/logo-dark.svg`, and the same names under `docs/logo/alt`), with the wordmark drawn in the family's lettering (ochazuke's and matomeru's; `--check` confirms the glyphs still redraw theirs, `--preview DIR` renders the icons at 16, 32 and 128 px). `vhs docs/vhs/demo.tape` records `assets/demo.gif` in a throwaway home; see [docs/vhs/README.md](docs/vhs/README.md).
+
+MIT license.

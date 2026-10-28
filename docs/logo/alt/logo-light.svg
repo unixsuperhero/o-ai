@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 265 112" width="265" height="112" role="img" aria-label="o-ai">
+<title>o-ai</title>
+<g transform="translate(-6.2 -4.6) scale(0.82)">
+<path d="M14 98C30 98 26 64 38 64" fill="none" stroke="#7d97e6" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="36" y="46" width="26" height="36" rx="7" fill="#3a5fe0"/>
+<path d="M62 55H74M62 73H74" stroke="#2b47b8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="84" y="36" width="28" height="56" rx="9" fill="#121a33"/>
+<path d="M94 55H102M94 73H102" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path d="M135.1 44a20 20 0 1 0 0.01 0M170.1 64h16M221.1 44a20 20 0 1 0 0.01 0M241.1 44V84M256.1 44V84M256.1 24h0.01" fill="none" stroke="#121a33" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
