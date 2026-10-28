@@ -1,0 +1,3 @@
+{ // comments allowed
+  "mcp": {"oc": {"type": "local", "command": ["oc-bin", "serve"], "environment": {"X": "1"}}},
+}

@@ -27,6 +27,7 @@ Family plans, todos and the roadmap live in `~/hub/o-plans/` (`README.md` is the
 | Skill sources (`~/.config/o-ai/sources.json`, the built-in ai-tools catalog), folding a source's skill into the harness rows that see the same file | `sources.go` |
 | Tables: each noun's catalog columns and its rows' cells (`tables`, `cellsOf`), the context-size spellings | `table.go` |
 | MCP servers from each harness's files (normalized, redacted), the tools omp cached in agent.db (`sqlite3 -readonly`, `mcp_tools:` rows only) | `mcp.go` |
+| Package `harness` (importable; o-mcp uses it): harness roots, config parsing (`ReadConfig`), redaction, every harness's MCP servers with their raw entry (`DiscoverMCP`, `Configured`), Codex session files. `main` keeps thin wrappers over it | `harness/harness.go` |
 | The quota noun: Claude and Codex logins, the usage endpoints, the Codex session-file fallback, quota rows | `quota.go` |
 | Tests: collectors and redaction (`main_test.go`), catalog, rows and `--target` (`shell_test.go`), every verb's history kind (`history_test.go`), the cache (`cache_test.go`), quota against httptest servers (`quota_test.go`) | `*_test.go` |
 

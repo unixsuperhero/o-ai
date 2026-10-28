@@ -3,24 +3,18 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 
-	"github.com/pelletier/go-toml/v2"
-	"github.com/tailscale/hujson"
-	"gopkg.in/yaml.v3"
+	"github.com/unixsuperhero/o-ai/harness"
 )
 
 const maxInput = 32 << 20
@@ -84,22 +78,7 @@ func collectHarness(o Options, need Need, id string) Inventory {
 			c.input(resolved) // an upgrade replaces the link's target
 		}
 	}
-	c.root = filepath.Join(o.Home, "."+id)
-	switch id {
-	case "omp":
-		c.root = filepath.Join(c.root, "agent")
-	case "pi":
-		c.root = filepath.Join(c.root, "agent")
-	case "opencode":
-		c.root = filepath.Join(envDefault("XDG_CONFIG_HOME", filepath.Join(o.Home, ".config")), "opencode")
-	case "claude":
-		c.root = envDefault("CLAUDE_CONFIG_DIR", c.root)
-	case "codex":
-		c.root = envDefault("CODEX_HOME", c.root)
-	}
-	if id == "omp" || id == "pi" {
-		c.root = envDefault("PI_CODING_AGENT_DIR", c.root)
-	}
+	c.root = harness.Root(id, o.Home)
 	c.input(c.root)
 	_, err = os.Stat(c.root)
 	c.harness.Configured = err == nil
@@ -193,54 +172,11 @@ func (c *collector) input(paths ...string) { c.options.inputs.add(paths...) }
 func (c *collector) warn(message string) { c.harness.Warnings = append(c.harness.Warnings, message) }
 
 // Never include parser excerpts: malformed configuration may contain credentials.
-func safeParseError(err error) string {
-	if os.IsPermission(err) {
-		return "permission denied"
-	}
-	return "invalid or unreadable configuration"
-}
+func safeParseError(err error) string { return harness.SafeParseError(err) }
 
-func readConfig(path string) (map[string]any, error) {
-	b, err := readBounded(path)
-	if err != nil {
-		return nil, err
-	}
-	var m map[string]any
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".toml":
-		err = toml.Unmarshal(b, &m)
-	case ".yaml", ".yml":
-		err = yaml.Unmarshal(b, &m)
-	default:
-		b, err = hujson.Standardize(b)
-		if err == nil {
-			err = json.Unmarshal(b, &m)
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-	if m == nil {
-		return nil, fmt.Errorf("expected object")
-	}
-	return m, nil
-}
+func readConfig(path string) (map[string]any, error) { return harness.ReadConfig(path) }
 
-func readBounded(path string) ([]byte, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, maxInput+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(b) > maxInput {
-		return nil, fmt.Errorf("file exceeds %d bytes", maxInput)
-	}
-	return b, nil
-}
+func readBounded(path string) ([]byte, error) { return harness.ReadBounded(path) }
 
 func mergeMap(dst, src map[string]any) {
 	for k, v := range src {
@@ -252,44 +188,7 @@ func mergeMap(dst, src map[string]any) {
 	}
 }
 
-var sensitiveKey = regexp.MustCompile(`(?i)(api.?key|access.?key|private.?key|secret|password|passwd|credential|authorization|cookie|headers|environment|token$|(^|[_-])env($|[_-])|^(key|auth|hooks|command|commands|args|arguments|notify|apikeyhelper)$)`)
-var secretValue = regexp.MustCompile(`(?i)(sk-[a-z0-9_-]{8,}|gh[pousr]_[a-z0-9_]{8,}|Bearer\s+[^\s"']+|eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)`)
-
-func redact(v any, key string) any {
-	if sensitiveKey.MatchString(key) {
-		return "[REDACTED]"
-	}
-	switch x := v.(type) {
-	case map[string]any:
-		out := make(map[string]any, len(x))
-		for k, value := range x {
-			out[k] = redact(value, k)
-		}
-		return out
-	case []any:
-		out := make([]any, len(x))
-		for i, value := range x {
-			out[i] = redact(value, "")
-		}
-		return out
-	case string:
-		s := secretValue.ReplaceAllString(x, "[REDACTED]")
-		if u, err := url.Parse(s); err == nil && u.Scheme != "" && u.Host != "" {
-			u.User = nil
-			u.RawQuery = ""
-			u.Fragment = ""
-			s = u.String()
-		}
-		return strings.Map(func(r rune) rune {
-			if unicode.IsControl(r) && r != '\n' && r != '\t' {
-				return -1
-			}
-			return r
-		}, s)
-	default:
-		return v
-	}
-}
+func redact(v any, key string) any { return harness.Redact(v, key) }
 
 type cappedBuffer struct{ bytes.Buffer }
 

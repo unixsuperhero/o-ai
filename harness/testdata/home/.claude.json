@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "local": {"command": "srv", "args": ["--token", "s3cret-value"], "env": {"API_KEY": "sk-abcdefghijklmnop"}},
+    "remote": {"type": "http", "url": "https://user:pw@example.test/mcp?key=1", "headers": {"Authorization": "Bearer xyz"}}
+  },
+  "projects": {
+    "PROJECT": {"mcpServers": {"proj": {"command": "p"}}}
+  }
+}

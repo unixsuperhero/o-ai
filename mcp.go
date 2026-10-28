@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/unixsuperhero/o-ai/harness"
 )
 
 // MCP servers are read from the harnesses' own configuration files, never
@@ -17,23 +19,8 @@ import (
 // read-only mode. Listing the tools of any other server would mean
 // starting it (initialize, tools/list), which o-ai does not do.
 
-// MCPServer is one configured server of one harness. Env and Headers are
-// the variable and header names only; args pass the secret-value redaction
-// and a value following or attached to a secret-looking flag is redacted.
-type MCPServer struct {
-	ID        string   `json:"id"`
-	Name      string   `json:"name"`
-	Harness   string   `json:"harness"`
-	Scope     string   `json:"scope"`
-	Config    string   `json:"config"`
-	Transport string   `json:"transport"`
-	Command   string   `json:"command,omitempty"`
-	Args      []string `json:"args,omitempty"`
-	URL       string   `json:"url,omitempty"`
-	Env       []string `json:"env,omitempty"`
-	Headers   []string `json:"headers,omitempty"`
-	Disabled  bool     `json:"disabled,omitempty"`
-}
+// MCPServer is one configured server of one harness (package harness).
+type MCPServer = harness.MCPServer
 
 // MCPTool is one tool a harness cached for a server.
 type MCPTool struct {
@@ -47,61 +34,11 @@ type MCPTool struct {
 	InputSchema map[string]any `json:"inputSchema,omitempty"`
 }
 
-// mcpFile is a configuration file that may hold servers: under key, a map
-// of name to server (project, for Claude's ~/.claude.json, the project's
-// entry under projects).
-type mcpFile struct{ path, key, scope string }
-
 func (c *collector) discoverMCP() {
 	h, o := c.harness.ID, c.options
-	var files []mcpFile
-	switch h {
-	case "claude", "clawed":
-		state := filepath.Join(o.Home, "."+h+".json")
-		if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" && h == "claude" {
-			state = filepath.Join(dir, ".claude.json")
-		}
-		files = append(files, mcpFile{state, "mcpServers", "user"}, mcpFile{state, "projects", "local"}, mcpFile{filepath.Join(o.Project, ".mcp.json"), "mcpServers", "project"})
-	case "codex":
-		files = append(files, mcpFile{filepath.Join(c.root, "config.toml"), "mcp_servers", "user"}, mcpFile{filepath.Join(o.Project, ".codex", "config.toml"), "mcp_servers", "project (trust-dependent)"})
-	case "omp":
-		files = append(files, mcpFile{filepath.Join(c.root, "mcp.json"), "mcpServers", "user"}, mcpFile{filepath.Join(o.Project, ".omp", "mcp.json"), "mcpServers", "project"})
-	case "gemini":
-		files = append(files, mcpFile{filepath.Join(c.root, "settings.json"), "mcpServers", "user"}, mcpFile{filepath.Join(o.Project, ".gemini", "settings.json"), "mcpServers", "project"})
-	case "opencode":
-		for _, name := range []string{"opencode.json", "opencode.jsonc"} {
-			files = append(files, mcpFile{filepath.Join(c.root, name), "mcp", "user"}, mcpFile{filepath.Join(o.Project, name), "mcp", "project"})
-		}
-	}
 	present := c.harness.Installed || c.harness.Configured
-	seen := map[string]bool{}
-	for _, f := range files {
-		// A project's file names a harness's servers only when the harness
-		// is here; a file read once (the project is the home) is one scope.
-		if (!present && f.scope != "user" && f.scope != "local") || seen[f.path+"#"+f.key] {
-			continue
-		}
-		seen[f.path+"#"+f.key] = true
-		c.input(f.path)
-		cfg, err := readConfig(f.path)
-		if os.IsNotExist(err) {
-			continue
-		}
-		if err != nil {
-			c.warn("Cannot read MCP servers in " + f.path + ": " + safeParseError(err))
-			continue
-		}
-		servers := object(cfg[f.key])
-		if f.key == "projects" {
-			servers = object(object(servers[o.Project])["mcpServers"])
-		}
-		disabled := stringList(cfg["disabledServers"]) // omp's denylist
-		for name, v := range servers {
-			s := mcpServer(object(v))
-			s.ID, s.Name, s.Harness, s.Scope, s.Config = h+":"+f.scope+":"+name, name, h, f.scope, f.path
-			s.Disabled = s.Disabled || contains(disabled, name)
-			c.inventory.MCPServers = append(c.inventory.MCPServers, s)
-		}
+	for _, e := range harness.DiscoverMCP(h, o.Home, c.root, o.Project, present, func(p string) { c.input(p) }, c.warn) {
+		c.inventory.MCPServers = append(c.inventory.MCPServers, e.Server)
 	}
 	sort.Slice(c.inventory.MCPServers, func(i, j int) bool { return c.inventory.MCPServers[i].ID < c.inventory.MCPServers[j].ID })
 	if h == "omp" {
@@ -109,80 +46,7 @@ func (c *collector) discoverMCP() {
 	}
 }
 
-// mcpServer is a server entry in any harness's spelling: Claude, Gemini,
-// omp and Codex (command, args, env, url or httpUrl, headers or
-// http_headers, type), OpenCode (type local or remote, command as an
-// array, environment).
-func mcpServer(m map[string]any) MCPServer {
-	var s MCPServer
-	args := stringList(m["args"])
-	if cmd, ok := m["command"].(string); ok {
-		s.Command = cmd
-	} else if parts := stringList(m["command"]); len(parts) > 0 {
-		s.Command, args = parts[0], append(parts[1:], args...)
-	}
-	s.Command, _ = redact(s.Command, "").(string)
-	s.Args = redactArgs(args)
-	for _, k := range []string{"url", "httpUrl", "serverUrl"} {
-		if u := text(m, k); u != "" {
-			s.URL, _ = redact(u, "").(string)
-			break
-		}
-	}
-	for _, k := range []string{"env", "environment"} {
-		s.Env = append(s.Env, keys(object(m[k]))...)
-	}
-	for _, k := range []string{"headers", "http_headers"} {
-		s.Headers = append(s.Headers, keys(object(m[k]))...)
-	}
-	switch t := text(m, "type"); {
-	case t == "local":
-		s.Transport = "stdio"
-	case t == "remote", t == "streamable-http", t == "streamableHttp":
-		s.Transport = "http"
-	case t != "":
-		s.Transport = t
-	case s.URL != "" && s.Command == "":
-		s.Transport = "http"
-	default:
-		s.Transport = "stdio"
-	}
-	s.Disabled = m["enabled"] == false || m["disabled"] == true
-	return s
-}
-
-// redactArgs passes each argument through the value redaction and hides a
-// value given to a secret-looking flag (--api-key VALUE, --token=VALUE).
-func redactArgs(args []string) []string {
-	if len(args) == 0 {
-		return nil
-	}
-	out := make([]string, len(args))
-	secretFlag := func(flag string) bool {
-		return strings.HasPrefix(flag, "-") && sensitiveKey.MatchString(strings.TrimLeft(flag, "-"))
-	}
-	for i, a := range args {
-		out[i], _ = redact(a, "").(string)
-		if flag, _, ok := strings.Cut(a, "="); ok && secretFlag(flag) {
-			out[i] = flag + "=[REDACTED]"
-		} else if i > 0 && secretFlag(args[i-1]) && !strings.Contains(args[i-1], "=") && !strings.HasPrefix(a, "-") {
-			out[i] = "[REDACTED]"
-		}
-	}
-	return out
-}
-
-func keys(m map[string]any) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
+func redactArgs(args []string) []string { return harness.RedactArgs(args) }
 
 // sqlite3 is the command that reads omp's agent.db; a test replaces it.
 var sqlite3 = "sqlite3"

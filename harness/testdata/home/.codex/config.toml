@@ -1,0 +1,7 @@
+[mcp_servers.off]
+command = "off-cmd"
+enabled = false
+
+[mcp_servers.bearer]
+url = "https://bearer.test/mcp"
+bearer_token_env_var = "BEARER_TOKEN"

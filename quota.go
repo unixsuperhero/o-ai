@@ -16,13 +16,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/unixsuperhero/ochazuke"
+
+	"github.com/unixsuperhero/o-ai/harness"
 )
 
 // The quota noun: how much of a plan's rate-limit windows Claude Code and
@@ -661,7 +662,7 @@ func windowLength(minutes int) string {
 // recorded: the last token_count event with rate_limits, newest file
 // first, observed at the file's modification time.
 func codexSessionQuota(home string, now time.Time) (string, []QuotaWindow, time.Time, error) {
-	files := newestSessionFiles(filepath.Join(home, "sessions"), 31, 200)
+	files := harness.SessionFiles(filepath.Join(home, "sessions"), 31, 200)
 	for _, path := range files {
 		limits := lastRateLimits(path)
 		if limits == nil {
@@ -678,39 +679,6 @@ func codexSessionQuota(home string, now time.Time) (string, []QuotaWindow, time.
 		return text(limits, "plan_type"), windows, info.ModTime(), nil
 	}
 	return "", nil, time.Time{}, errors.New("no Codex session file records rate limits")
-}
-
-// newestSessionFiles are the .jsonl files under sessions/YYYY/MM/DD, the
-// newest days first (at most days of them), newest name first, at most n.
-func newestSessionFiles(root string, days, n int) []string {
-	desc := func(dir string) []string {
-		entries, _ := os.ReadDir(dir)
-		var names []string
-		for _, e := range entries {
-			names = append(names, e.Name())
-		}
-		sort.Sort(sort.Reverse(sort.StringSlice(names)))
-		return names
-	}
-	var out []string
-	for _, y := range desc(root) {
-		for _, m := range desc(filepath.Join(root, y)) {
-			for _, d := range desc(filepath.Join(root, y, m)) {
-				if days--; days < 0 {
-					return out
-				}
-				for _, f := range desc(filepath.Join(root, y, m, d)) {
-					if strings.HasSuffix(f, ".jsonl") {
-						out = append(out, filepath.Join(root, y, m, d, f))
-						if len(out) >= n {
-							return out
-						}
-					}
-				}
-			}
-		}
-	}
-	return out
 }
 
 // lastRateLimits is the payload.rate_limits of a session file's last
