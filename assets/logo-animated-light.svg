@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 172 112" width="172" height="112" role="img" aria-label="o-ai">
+<title>o-ai</title>
+<style>.sp{transform-box:fill-box;transform-origin:50% 50%}@media (prefers-reduced-motion: no-preference){.sp{animation:twinkle 3.2s cubic-bezier(.45,0,.25,1) infinite}@keyframes twinkle{0%{transform:none}10%{transform:rotate(20deg) scale(0.6,0.6)}22%{transform:rotate(70deg) scale(1.15,1.15)}30%,100%{transform:rotate(90deg) scale(1,1)}}}</style>
+<path d="M28 44a20 20 0 1 0 0.01 0M63 64h16M114 44a20 20 0 1 0 0.01 0M134 44V84M149 44V84" fill="none" stroke="#121a33" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+<path class="sp" d="M149 6Q149 20 163 20Q149 20 149 34Q149 20 135 20Q149 20 149 6Z" fill="#4a72f0"/>
+</svg>
