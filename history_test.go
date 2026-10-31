@@ -23,16 +23,16 @@ func TestEveryVerbDeclaresItsHistory(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &doc); err != nil {
 		t.Fatal(err)
 	}
-	// The framework's verbs are keyed app.<noun>.<verb> (ochazuke v0.16.0),
-	// so o-ai's own settings.* (DefineOwn) is never mistaken for them.
-	framework := ochazuke.NewRuntime().Operations
+	// The framework's verbs carry the catalog's builtin, so o-ai's own
+	// settings.* and agent.* (DefineOwn) are never mistaken for them and a
+	// library release that adds framework verbs does not change the count.
 	tool := &Tool{Stdin: strings.NewReader(""), Stdout: io.Discard, Stderr: io.Discard, Env: os.Environ(), Prog: "o-ai"}
 	ops := tool.shell().Runtime.Operations
 	n := 0
 	for _, noun := range doc.Nouns {
 		for _, v := range noun.Verbs {
 			key := noun.Name + "." + v.Name
-			if _, ok := framework[key]; ok {
+			if v.Builtin {
 				continue
 			}
 			n++

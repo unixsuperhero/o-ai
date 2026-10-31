@@ -178,11 +178,15 @@ func merged(ms ...map[string]ochazuke.Parameter) map[string]ochazuke.Parameter {
 
 func (t *Tool) shell() *ocli.Shell {
 	r := ochazuke.NewRuntime()
-	// The framework's settings noun (app.settings, ochazuke v0.16.0) keeps
-	// its verbs; o-ai's settings noun is the inventory kind and owns the
-	// short name, so `o-ai settings list` lists harness settings files and
-	// `o-ai app settings list` the framework's.
-	r.DefineOwn("settings")
+	// Every inventory kind is o-ai's own noun (DefineOwn) and owns its short
+	// name over a framework noun's alias: the framework's settings noun
+	// (ochazuke.settings) keeps its verbs while `o-ai settings list` lists
+	// harness settings files, and ochazuke.agent (agent instructions and
+	// rights, ochazuke v0.76.0) keeps its verbs while `o-ai agent list`
+	// lists agents. A later r.Define(noun) then reaches o-ai's noun.
+	for _, noun := range nouns {
+		r.DefineOwn(noun)
+	}
 	lists := map[string]*ochazuke.List{}
 	for _, noun := range nouns {
 		list, err := r.AddList("list/"+noun, nil)
