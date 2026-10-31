@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/unixsuperhero/o-ai/harness"
+	"ofam.dev/o-ai/harness"
 )
 
 const maxInput = 32 << 20

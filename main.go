@@ -33,8 +33,8 @@ import (
 	"strings"
 	"time"
 
-	ocli "github.com/unixsuperhero/ochazuke/cli"
-	"github.com/unixsuperhero/oden"
+	ocli "ofam.dev/ochazuke/cli"
+	"ofam.dev/oden"
 )
 
 // Tool is one invocation's world: streams, environment, and the home and

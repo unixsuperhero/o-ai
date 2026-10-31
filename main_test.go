@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/unixsuperhero/oden"
+	"ofam.dev/oden"
 )
 
 func TestUniqueCommandPrefixes(t *testing.T) {

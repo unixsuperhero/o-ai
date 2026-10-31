@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/unixsuperhero/ochazuke"
-	ocli "github.com/unixsuperhero/ochazuke/cli"
+	"ofam.dev/ochazuke"
+	ocli "ofam.dev/ochazuke/cli"
 )
 
 // The command line is an ochazuke runtime behind ochazuke/cli: one noun per

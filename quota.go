@@ -21,9 +21,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/unixsuperhero/ochazuke"
+	"ofam.dev/ochazuke"
 
-	"github.com/unixsuperhero/o-ai/harness"
+	"ofam.dev/o-ai/harness"
 )
 
 // The quota noun: how much of a plan's rate-limit windows Claude Code and

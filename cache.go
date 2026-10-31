@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	ocli "github.com/unixsuperhero/ochazuke/cli"
+	ocli "ofam.dev/ochazuke/cli"
 )
 
 // The inventory cache: one collection serves every verb run within the TTL,

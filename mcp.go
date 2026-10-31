@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/unixsuperhero/o-ai/harness"
+	"ofam.dev/o-ai/harness"
 )
 
 // MCP servers are read from the harnesses' own configuration files, never

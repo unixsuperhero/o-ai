@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/unixsuperhero/ochazuke"
+	"ofam.dev/ochazuke"
 )
 
 // stateWorld runs o-ai's real collection (no probes) over a temporary home

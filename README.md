@@ -4,8 +4,8 @@
     <img alt="o-ai" src="assets/logo-light.svg" width="120">
   </picture>
   <br>
-  <a href="go.mod"><img alt="Go version" src="https://img.shields.io/github/go-mod/go-version/unixsuperhero/o-ai"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/unixsuperhero/o-ai"></a>
+  <a href="go.mod"><img alt="Go version" src="https://img.shields.io/github/go-mod/go-version/ofamtools/o-ai"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/ofamtools/o-ai"></a>
 </p>
 
 <p align="center">Your local AI setup as JSON: the harnesses, providers, models, skills, agents, settings, MCP servers and quotas on this machine, inspected without a single model request.</p>
@@ -18,10 +18,10 @@ Every verb prints JSON. There is no TUI in this repository: nabe is the TUI (`o 
 
 ## Install
 
-Module `github.com/unixsuperhero/o-ai`; requires Go 1.26 or newer.
+Module `ofam.dev/o-ai`; requires Go 1.26 or newer.
 
 ```sh
-go install github.com/unixsuperhero/o-ai@latest
+go install ofam.dev/o-ai@latest
 ```
 
 or, from a checkout:
@@ -294,12 +294,12 @@ Settings and metadata redact secret-bearing fields, credential/header/environmen
 
 ## In the family
 
-o-ai is one of the family's `o-*` tools: an [oden](https://github.com/unixsuperhero/oden) app whose nouns are an [ochazuke](https://github.com/unixsuperhero/ochazuke) runtime behind `ochazuke/cli`, with no TUI of its own.
+o-ai is one of the family's `o-*` tools: an [oden](https://github.com/ofamtools/oden) app whose nouns are an [ochazuke](https://github.com/ofamtools/ochazuke) runtime behind `ochazuke/cli`, with no TUI of its own.
 
 | Where | How o-ai appears |
 | --- | --- |
 | `o ai ...` | oden's `o` root runs any `o-<tool>` on PATH. |
-| `mtm ai ...` | [matomeru](https://github.com/unixsuperhero/matomeru)'s `mtm` discovers the family's `o-<sub>` tools after its own `mtm-<sub>` bins, so `mtm ai` runs `o-ai` unless an `mtm-ai` is on PATH. |
+| `mtm ai ...` | [matomeru](https://github.com/ofamtools/matomeru)'s `mtm` discovers the family's `o-<sub>` tools after its own `mtm-<sub>` bins, so `mtm ai` runs `o-ai` unless an `mtm-ai` is on PATH. |
 | nabe (`o tui`) | The TUI host mounts o-ai's catalog as the page `ai`, one list per noun, fed by `status state`. |
 
 ### The TUI is nabe

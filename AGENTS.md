@@ -1,6 +1,6 @@
 # o-ai: agent guide
 
-The AI hub's data tool (`o-ai`, so `o ai` and `mtm ai`). An oden app with an ochazuke runtime (`github.com/unixsuperhero/ochazuke`) behind `ochazuke/cli`: one noun per inventory kind (harness, provider, model, thinking, skill, agent, settings, mcp, mcp-tool) plus status, every verb printing JSON. It was aiview (hub/ai/utils/aiview; its history is in this repository's log). It has no TUI: nabe (`o tui`) mounts its catalog as the page `ai`.
+The AI hub's data tool (`o-ai`, so `o ai` and `mtm ai`). An oden app with an ochazuke runtime (`ofam.dev/ochazuke`) behind `ochazuke/cli`: one noun per inventory kind (harness, provider, model, thinking, skill, agent, settings, mcp, mcp-tool) plus status, every verb printing JSON. It was aiview (hub/ai/utils/aiview; its history is in this repository's log). It has no TUI: nabe (`o tui`) mounts its catalog as the page `ai`.
 
 ## Plans and todos
 
